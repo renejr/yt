@@ -7,6 +7,7 @@ import threading
 import logging
 import json
 from datetime import datetime
+from database_manager import DatabaseManager
 
 # Configurar logging
 logging.basicConfig(
@@ -304,41 +305,45 @@ def baixar_video():
     progress_label.config(text="Preparando download...")
     root.update_idletasks()  # Forçar atualização da interface
     
-    # Download concluído com sucesso
     def download_success():
-        """Callback para download bem-sucedido"""
-        global is_downloading
+        """Função chamada quando o download é concluído com sucesso"""
+        global info, db_manager
         
-        # Mostrar 100% apenas quando tudo estiver realmente concluído
-        root.after(0, lambda: update_progress_ui(100, "100%", "Concluído!", "Finalizado"))
-        
-        # NOVO: Adicionar ao histórico
         try:
-            url = url_entry.get().strip()
-            title = info.get('title', 'Vídeo sem título') if info else 'Vídeo'
-            selected_index = resolutions_listbox.curselection()
-            resolution = resolutions_listbox.get(selected_index) if selected_index else 'N/A'
+            # Atualizar UI para 100%
+            progress_bar['value'] = 100
+            progress_label.config(text="Download concluído!")
+            root.update()
             
-            # Estimar caminho do arquivo
-            safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
-            file_path = os.path.join(download_directory, f"{safe_title}.mp4")
+            # Salvar no histórico do banco de dados
+            if info:
+                download_data = {
+                    'url': url_entry.get(),
+                    'title': info.get('title', 'Título não disponível'),
+                    'duration': info.get('duration_string', 'N/A'),
+                    'resolution': resolucao_var.get(),
+                    'file_size': info.get('filesize_approx', 0),
+                    'download_path': download_directory,
+                    'status': 'completed',
+                    'thumbnail_url': info.get('thumbnail'),
+                    'uploader': info.get('uploader', 'N/A'),
+                    'view_count': info.get('view_count', 0),
+                    'like_count': info.get('like_count', 0),
+                    'description': info.get('description', '')
+                }
+                
+                try:
+                    download_id = db_manager.add_download(download_data)
+                    log_info(f"Download salvo no histórico com ID: {download_id}")
+                except Exception as e:
+                    log_error(e, "Erro ao salvar download no histórico")
             
-            # Obter tamanho do arquivo se existir
-            file_size = None
-            if os.path.exists(file_path):
-                file_size = os.path.getsize(file_path)
+            # Finalizar UI após 2 segundos
+            root.after(2000, finalize_ui)
             
-            # Adicionar ao histórico
-            history_manager.add_download(url, title, resolution, file_path, file_size)
-            
-            # Atualizar aba de histórico se estiver visível
-            if 'history_tree' in globals():
-                atualizar_historico()
-                    
         except Exception as e:
-            log_error(e, "Erro ao adicionar download ao histórico")
+            log_error(e, "Erro em download_success")
             
-        # Aguardar um pouco para o usuário ver o 100%
         def finalize_ui():
             global is_downloading
             is_downloading = False
@@ -462,32 +467,34 @@ def resolucao_selecionada(event):
         print(f"[ERRO] Erro ao selecionar resolução: {e}")
 
 def selecionar_diretorio():
-    """Abre diálogo para seleção de diretório de download"""
-    global download_dir, download_directory  # Declarar ambas as variáveis
+    """Abre diálogo para selecionar diretório de download"""
+    global download_directory, db_manager
     
     try:
-        from tkinter import filedialog
-        
-        # Abre o diálogo de seleção de pasta
-        diretorio = filedialog.askdirectory(
-            title="Selecionar Diretório de Download",
-            initialdir=download_dir or download_directory or "."
-        )
-        
-        if diretorio:  # Se o usuário selecionou um diretório
-            download_dir = diretorio
-            download_directory = diretorio  # Manter compatibilidade
+        diretorio = filedialog.askdirectory(title="Selecionar diretório para download")
+        if diretorio:
+            download_directory = diretorio
+            # Quebrar texto longo para melhor visualização
+            texto_diretorio = f"Diretório: {diretorio}"
+            diretorio_label.config(text=texto_diretorio)
             
-            # Atualiza o label com o novo diretório
-            diretorio_label.config(text=f"Diretório: {diretorio}")
+            # Salvar configuração no banco de dados
+            try:
+                db_manager.set_setting('default_download_path', diretorio)
+                log_info(f"Diretório padrão salvo: {diretorio}")
+            except Exception as e:
+                log_error(e, "Erro ao salvar configuração de diretório")
             
-            print(f"[INFO] Diretório de download alterado para: {diretorio}")
+            log_info(f"Diretório selecionado: {diretorio}")
             
-            # Revalida o estado do botão de download
-            habilitar_botao_download()
-        else:
-            print("[INFO] Seleção de diretório cancelada")
-            
+            # Habilitar botão de download se URL estiver preenchida
+            if url_entry.get().strip():
+                baixar_button.config(state=tk.NORMAL)
+                print("[INFO] Botão de download habilitado")
+            else:
+                baixar_button.config(state=tk.DISABLED)
+                print("[INFO] Botão de download desabilitado - faltam informações")
+                
     except Exception as e:
         print(f"[ERRO] Erro ao selecionar diretório: {e}")
 
@@ -515,7 +522,7 @@ def criar_aba_historico():
     tk.Button(controls_frame, text="🗑️ Limpar Tudo", 
               command=limpar_historico).pack(side=tk.LEFT, padx=2)
     tk.Button(controls_frame, text="📁 Abrir Pasta", 
-              command=abrir_pasta_download).pack(side=tk.LEFT, padx=2)
+              command=lambda: os.startfile(download_directory) if download_directory and os.path.exists(download_directory) else messagebox.showwarning("Aviso", "Diretório não selecionado ou não existe")).pack(side=tk.LEFT, padx=2)
     
     # Treeview para mostrar histórico
     tree_frame = tk.Frame(history_frame)
@@ -549,12 +556,14 @@ def criar_aba_historico():
     v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
     h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
     
-    # Menu de contexto
+    # Menu de contexto (clique direito)
     history_menu = tk.Menu(root, tearoff=0)
     history_menu.add_command(label="🔄 Redownload", command=redownload_video)
-    history_menu.add_command(label="📁 Abrir Arquivo", command=abrir_arquivo)
-    history_menu.add_command(label="📋 Copiar URL", command=copiar_url)
-    history_menu.add_command(label="🗑️ Remover", command=remover_do_historico)
+    history_menu.add_command(label="📁 Abrir Arquivo", command=abrir_arquivo_historico)
+    history_menu.add_command(label="📂 Mostrar na Pasta", command=abrir_pasta_arquivo_historico)
+    history_menu.add_command(label="📋 Copiar URL", command=copiar_url_historico)
+    history_menu.add_separator()
+    history_menu.add_command(label="🗑️ Remover", command=remover_item_historico)
     
     def mostrar_menu_historico(event):
         try:
@@ -575,7 +584,7 @@ def atualizar_historico():
             history_tree.delete(item)
         
         # Carregar dados recentes
-        recent_downloads = history_manager.get_recent_downloads()
+        recent_downloads = db_manager.get_recent_downloads()
         
         for download in recent_downloads:
             # Formatar data
@@ -622,9 +631,138 @@ def limpar_historico():
         "⚠️ Esta ação não pode ser desfeita."
     )
     if resposta:
-        history_manager.clear_history()
+        db_manager.clear_history()
         atualizar_historico()
         messagebox.showinfo("Sucesso", "Histórico limpo com sucesso!")
+
+# Funções do menu de contexto do histórico
+def abrir_arquivo_historico():
+    """Abre o arquivo selecionado no histórico"""
+    selection = history_tree.selection()
+    if not selection:
+        messagebox.showwarning("Aviso", "Selecione um item do histórico")
+        return
+    
+    try:
+        # Obter dados do item selecionado
+        item_id = history_tree.item(selection[0])['tags'][0]
+        download_data = db_manager.get_download_by_id(item_id)
+        
+        # CORRIGIDO: usar 'download_path' em vez de 'file_path'
+        if download_data and download_data.get('download_path'):
+            file_path = download_data['download_path']
+            if os.path.exists(file_path):
+                os.startfile(file_path)  # Windows
+                log_info(f"Arquivo aberto: {file_path}")
+            else:
+                messagebox.showerror("Erro", "Arquivo não encontrado no disco")
+        else:
+            messagebox.showerror("Erro", "Caminho do arquivo não disponível")
+    except Exception as e:
+        log_error(e, "Erro ao abrir arquivo")
+        messagebox.showerror("Erro", "Erro ao abrir arquivo")
+
+def abrir_pasta_arquivo_historico():
+    """Abre a pasta contendo o arquivo selecionado"""
+    selection = history_tree.selection()
+    if not selection:
+        messagebox.showwarning("Aviso", "Selecione um item do histórico")
+        return
+    
+    try:
+        item_id = history_tree.item(selection[0])['tags'][0]
+        download_data = db_manager.get_download_by_id(item_id)
+        
+        if download_data and download_data.get('download_path'):
+            file_path = download_data['download_path']
+            if os.path.exists(file_path):
+                # Abre a pasta e seleciona o arquivo
+                os.system(f'explorer /select,"{file_path}"')
+                log_info(f"Pasta aberta com arquivo selecionado: {file_path}")
+            else:
+                messagebox.showerror("Erro", "Arquivo não encontrado no disco")
+        else:
+            messagebox.showerror("Erro", "Caminho do arquivo não disponível")
+    except Exception as e:
+        log_error(e, "Erro ao abrir pasta do arquivo")
+
+def copiar_url_historico():
+    """Copia a URL do vídeo selecionado"""
+    selection = history_tree.selection()
+    if not selection:
+        messagebox.showwarning("Aviso", "Selecione um item do histórico")
+        return
+    
+    try:
+        item_id = history_tree.item(selection[0])['tags'][0]
+        download_data = db_manager.get_download_by_id(item_id)
+        
+        if download_data and download_data.get('url'):
+            root.clipboard_clear()
+            root.clipboard_append(download_data['url'])
+            messagebox.showinfo("Sucesso", "URL copiada para a área de transferência")
+            log_info("URL copiada do histórico")
+        else:
+            messagebox.showerror("Erro", "URL não disponível")
+    except Exception as e:
+        log_error(e, "Erro ao copiar URL")
+        messagebox.showerror("Erro", "Erro ao copiar URL")
+
+def remover_item_historico():
+    """Remove item específico do histórico"""
+    selection = history_tree.selection()
+    if not selection:
+        messagebox.showwarning("Aviso", "Selecione um item do histórico")
+        return
+    
+    try:
+        # Obter título para confirmação
+        item_values = history_tree.item(selection[0])['values']
+        titulo = item_values[1] if len(item_values) > 1 else "Item selecionado"
+        
+        resposta = messagebox.askyesno(
+            "Confirmar Remoção", 
+            f"Deseja remover este item do histórico?\n\n{titulo}\n\n⚠️ Esta ação não pode ser desfeita."
+        )
+        if resposta:
+            item_id = history_tree.item(selection[0])['tags'][0]
+            db_manager.remove_download(item_id)
+            atualizar_historico()
+            messagebox.showinfo("Sucesso", "Item removido do histórico")
+            log_info(f"Item removido do histórico: {titulo}")
+    except Exception as e:
+        log_error(e, "Erro ao remover item")
+        messagebox.showerror("Erro", "Erro ao remover item do histórico")
+
+def redownload_video():
+    """Recarrega a URL na aba principal para novo download"""
+    selection = history_tree.selection()
+    if not selection:
+        messagebox.showwarning("Aviso", "Selecione um item do histórico")
+        return
+    
+    try:
+        item_id = history_tree.item(selection[0])['tags'][0]
+        download_data = db_manager.get_download_by_id(item_id)
+        
+        if download_data and download_data.get('url'):
+            # Mudar para aba principal
+            notebook.select(0)
+            # Limpar e inserir URL
+            url_entry.delete(0, tk.END)
+            url_entry.insert(0, download_data['url'])
+            # Limpar informações anteriores
+            resolutions_listbox.delete(0, tk.END)
+            metadata_text.delete("1.0", tk.END)
+            baixar_button.config(state=tk.DISABLED)
+            
+            messagebox.showinfo("Sucesso", "URL carregada na aba principal\n\nClique em 'Extrair informações' para continuar")
+            log_info(f"URL recarregada: {download_data['url']}")
+        else:
+            messagebox.showerror("Erro", "URL não disponível")
+    except Exception as e:
+        log_error(e, "Erro ao recarregar vídeo")
+        messagebox.showerror("Erro", "Erro ao recarregar vídeo")
 
 def sair_aplicacao():
     """Função para sair da aplicação com confirmação"""
@@ -652,6 +790,9 @@ root = tk.Tk()
 root.title("Baixador de Vídeos do YouTube v2.1 - Histórico")
 root.geometry("1000x750")  # Aumentar tamanho para acomodar histórico
 root.minsize(900, 650)
+
+# Criar variáveis tkinter
+resolucao_var = tk.StringVar(value="720p")  # Valor padrão
 
 # Criar notebook (abas)
 notebook = ttk.Notebook(root)
@@ -740,5 +881,422 @@ root.protocol("WM_DELETE_WINDOW", sair_aplicacao)
 # Log inicial
 log_info("Aplicação iniciada")
 
-# Executar aplicação
+# Inicializar banco de dados
+db_manager = DatabaseManager()
+
+def initialize_app():
+    """Inicializa a aplicação e o banco de dados"""
+    try:
+        # Inicializa o banco de dados automaticamente
+        db_manager.initialize()
+        log_info("Sistema de banco de dados inicializado com sucesso")
+        
+        # Carrega configurações salvas
+        global download_directory
+        saved_dir = db_manager.get_setting('default_download_path', '')
+        if saved_dir and os.path.exists(saved_dir):
+            download_directory = saved_dir
+            diretorio_label.config(text=f"Diretório: {download_directory}")
+            log_info(f"Diretório padrão carregado: {download_directory}")
+        
+        # Carregar resolução padrão
+        default_resolution = db_manager.get_setting('default_resolution', '720p')
+        if default_resolution in ['144p', '240p', '360p', '480p', '720p', '1080p', 'best']:
+            resolucao_var.set(default_resolution)
+            log_info(f"Resolução padrão carregada: {default_resolution}")
+            
+    except Exception as e:
+        log_error(e, "Erro ao inicializar banco de dados")
+        messagebox.showerror("Erro", "Erro ao inicializar sistema de dados")
+
+# Chamar antes de root.mainloop()
+initialize_app()
+
+def salvar_resolucao_padrao():
+    """Salva a resolução selecionada como padrão"""
+    try:
+        resolucao_atual = resolucao_var.get()
+        db_manager.set_setting('default_resolution', resolucao_atual)
+        log_info(f"Resolução padrão salva: {resolucao_atual}")
+    except Exception as e:
+        log_error(e, "Erro ao salvar resolução padrão")
+
+# Adicionar callback para salvar resolução quando alterada
+def on_resolution_change(*args):
+    """Callback chamado quando resolução é alterada"""
+    salvar_resolucao_padrao()
+
+# Vincular callback à variável de resolução
+resolucao_var.trace('w', on_resolution_change)
+
+def mostrar_menu(event):
+    menu.post(event.x_root, event.y_root)
+
+def colar_texto():
+    """Cola texto da área de transferência no campo URL"""
+    try:
+        # Limpa o campo atual
+        url_entry.delete(0, tk.END)
+        # Cola o texto da área de transferência
+        texto_colado = root.clipboard_get()
+        url_entry.insert(0, texto_colado)
+        print(f"[INFO] Texto colado: {texto_colado[:50]}{'...' if len(texto_colado) > 50 else ''}")
+    except tk.TclError:
+        print("[AVISO] Área de transferência vazia ou inacessível")
+    except Exception as e:
+        print(f"[ERRO] Erro ao colar texto: {e}")
+
+def habilitar_botao_download():
+    """Verifica se o botão de download pode ser habilitado"""
+    try:
+        # Verifica se há informações extraídas e uma resolução selecionada
+        if info and resolutions_listbox.curselection():
+            baixar_button.config(state=tk.NORMAL)
+            print("[INFO] Botão de download habilitado")
+        else:
+            baixar_button.config(state=tk.DISABLED)
+            print("[INFO] Botão de download desabilitado - faltam informações")
+    except Exception as e:
+        print(f"[ERRO] Erro ao habilitar botão: {e}")
+        baixar_button.config(state=tk.DISABLED)
+
+def resolucao_selecionada(event):
+    """Callback quando uma resolução é selecionada na listbox"""
+    try:
+        selection = resolutions_listbox.curselection()
+        if selection:
+            index = selection[0]
+            resolucao = resolutions_listbox.get(index)
+            print(f"[INFO] Resolução selecionada: {resolucao}")
+            
+            # Habilita o botão de download se uma resolução foi selecionada
+            habilitar_botao_download()
+            
+    except Exception as e:
+        print(f"[ERRO] Erro ao selecionar resolução: {e}")
+
+def selecionar_diretorio():
+    """Abre diálogo para selecionar diretório de download"""
+    global download_directory, db_manager
+    
+    try:
+        diretorio = filedialog.askdirectory(title="Selecionar diretório para download")
+        if diretorio:
+            download_directory = diretorio
+            # Quebrar texto longo para melhor visualização
+            texto_diretorio = f"Diretório: {diretorio}"
+            diretorio_label.config(text=texto_diretorio)
+            
+            # Salvar configuração no banco de dados
+            try:
+                db_manager.set_setting('default_download_path', diretorio)
+                log_info(f"Diretório padrão salvo: {diretorio}")
+            except Exception as e:
+                log_error(e, "Erro ao salvar configuração de diretório")
+            
+            log_info(f"Diretório selecionado: {diretorio}")
+            
+            # Habilitar botão de download se URL estiver preenchida
+            if url_entry.get().strip():
+                baixar_button.config(state=tk.NORMAL)
+                print("[INFO] Botão de download habilitado")
+            else:
+                baixar_button.config(state=tk.DISABLED)
+                print("[INFO] Botão de download desabilitado - faltam informações")
+                
+    except Exception as e:
+        print(f"[ERRO] Erro ao selecionar diretório: {e}")
+
+def criar_aba_historico():
+    """Cria aba do histórico de downloads"""
+    global history_frame, history_tree
+    
+    # Frame principal do histórico
+    history_frame = tk.Frame(notebook)
+    notebook.add(history_frame, text="📋 Histórico")
+    
+    # Título e controles
+    title_frame = tk.Frame(history_frame)
+    title_frame.pack(fill=tk.X, padx=10, pady=5)
+    
+    tk.Label(title_frame, text="Histórico de Downloads", 
+             font=("Arial", 14, "bold")).pack(side=tk.LEFT)
+    
+    # Botões de controle
+    controls_frame = tk.Frame(title_frame)
+    controls_frame.pack(side=tk.RIGHT)
+    
+    tk.Button(controls_frame, text="🔄 Atualizar", 
+              command=atualizar_historico).pack(side=tk.LEFT, padx=2)
+    tk.Button(controls_frame, text="🗑️ Limpar Tudo", 
+              command=limpar_historico).pack(side=tk.LEFT, padx=2)
+    tk.Button(controls_frame, text="📁 Abrir Pasta", 
+              command=lambda: os.startfile(download_directory) if download_directory and os.path.exists(download_directory) else messagebox.showwarning("Aviso", "Diretório não selecionado ou não existe")).pack(side=tk.LEFT, padx=2)
+    
+    # Treeview para mostrar histórico
+    tree_frame = tk.Frame(history_frame)
+    tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+    
+    # Configurar colunas
+    columns = ('Data', 'Título', 'Resolução', 'Status', 'Tamanho')
+    history_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
+    
+    # Configurar cabeçalhos
+    history_tree.heading('Data', text='Data/Hora')
+    history_tree.heading('Título', text='Título do Vídeo')
+    history_tree.heading('Resolução', text='Resolução')
+    history_tree.heading('Status', text='Status')
+    history_tree.heading('Tamanho', text='Tamanho')
+    
+    # Configurar larguras das colunas
+    history_tree.column('Data', width=150)
+    history_tree.column('Título', width=400)
+    history_tree.column('Resolução', width=100)
+    history_tree.column('Status', width=100)
+    history_tree.column('Tamanho', width=100)
+    
+    # Scrollbars
+    v_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=history_tree.yview)
+    h_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=history_tree.xview)
+    history_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+    
+    # Pack treeview e scrollbars
+    history_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+    
+    # Menu de contexto (clique direito)
+    history_menu = tk.Menu(root, tearoff=0)
+    history_menu.add_command(label="🔄 Redownload", command=redownload_video)
+    history_menu.add_command(label="📁 Abrir Arquivo", command=abrir_arquivo_historico)
+    history_menu.add_command(label="📂 Mostrar na Pasta", command=abrir_pasta_arquivo_historico)
+    history_menu.add_command(label="📋 Copiar URL", command=copiar_url_historico)
+    history_menu.add_separator()
+    history_menu.add_command(label="🗑️ Remover", command=remover_item_historico)
+    
+    def mostrar_menu_historico(event):
+        try:
+            history_menu.post(event.x_root, event.y_root)
+        except:
+            pass
+    
+    history_tree.bind("<Button-3>", mostrar_menu_historico)
+    
+    # Carregar dados iniciais
+    atualizar_historico()
+
+def atualizar_historico():
+    """Atualiza a exibição do histórico"""
+    try:
+        # Limpar treeview
+        for item in history_tree.get_children():
+            history_tree.delete(item)
+        
+        # Carregar dados recentes
+        recent_downloads = db_manager.get_recent_downloads()
+        
+        for download in recent_downloads:
+            # Formatar data
+            try:
+                dt = datetime.fromisoformat(download['timestamp'])
+                data_formatada = dt.strftime('%d/%m/%Y %H:%M')
+            except:
+                data_formatada = download.get('timestamp', 'N/A')
+            
+            # Formatar tamanho
+            tamanho = download.get('file_size', 'N/A')
+            if isinstance(tamanho, (int, float)):
+                if tamanho > 1024*1024*1024:  # GB
+                    tamanho = f"{tamanho/(1024*1024*1024):.1f} GB"
+                elif tamanho > 1024*1024:  # MB
+                    tamanho = f"{tamanho/(1024*1024):.1f} MB"
+                else:
+                    tamanho = f"{tamanho/1024:.1f} KB"
+            
+            # Truncar título se muito longo
+            titulo = download.get('title', 'N/A')
+            if len(titulo) > 60:
+                titulo = titulo[:57] + "..."
+            
+            # Inserir no treeview
+            history_tree.insert('', 'end', values=(
+                data_formatada,
+                titulo,
+                download.get('resolution', 'N/A'),
+                download.get('status', 'N/A'),
+                tamanho
+            ), tags=(download.get('id'),))
+        
+        log_info(f"Histórico atualizado: {len(recent_downloads)} entradas")
+        
+    except Exception as e:
+        log_error(e, "Erro ao atualizar histórico")
+
+def limpar_historico():
+    """Limpa todo o histórico com confirmação"""
+    resposta = messagebox.askyesno(
+        "Confirmar Limpeza", 
+        "Deseja realmente limpar todo o histórico de downloads?\n\n"
+        "⚠️ Esta ação não pode ser desfeita."
+    )
+    if resposta:
+        db_manager.clear_history()
+        atualizar_historico()
+        messagebox.showinfo("Sucesso", "Histórico limpo com sucesso!")
+
+# Funções do menu de contexto do histórico
+def abrir_arquivo_historico():
+    """Abre o arquivo selecionado no histórico"""
+    selection = history_tree.selection()
+    if not selection:
+        messagebox.showwarning("Aviso", "Selecione um item do histórico")
+        return
+    
+    try:
+        # Obter dados do item selecionado
+        item_id = history_tree.item(selection[0])['tags'][0]
+        download_data = db_manager.get_download_by_id(item_id)
+        
+        # CORRIGIDO: usar 'download_path' em vez de 'file_path'
+        if download_data and download_data.get('download_path'):
+            file_path = download_data['download_path']
+            if os.path.exists(file_path):
+                os.startfile(file_path)  # Windows
+                log_info(f"Arquivo aberto: {file_path}")
+            else:
+                messagebox.showerror("Erro", "Arquivo não encontrado no disco")
+        else:
+            messagebox.showerror("Erro", "Caminho do arquivo não disponível")
+    except Exception as e:
+        log_error(e, "Erro ao abrir arquivo")
+        messagebox.showerror("Erro", "Erro ao abrir arquivo")
+
+def abrir_pasta_arquivo_historico():
+    """Abre a pasta contendo o arquivo selecionado"""
+    selection = history_tree.selection()
+    if not selection:
+        messagebox.showwarning("Aviso", "Selecione um item do histórico")
+        return
+    
+    try:
+        item_id = history_tree.item(selection[0])['tags'][0]
+        download_data = db_manager.get_download_by_id(item_id)
+        
+        if download_data and download_data.get('download_path'):
+            file_path = download_data['download_path']
+            if os.path.exists(file_path):
+                # Abre a pasta e seleciona o arquivo
+                os.system(f'explorer /select,"{file_path}"')
+                log_info(f"Pasta aberta com arquivo selecionado: {file_path}")
+            else:
+                messagebox.showerror("Erro", "Arquivo não encontrado no disco")
+        else:
+            messagebox.showerror("Erro", "Caminho do arquivo não disponível")
+    except Exception as e:
+        log_error(e, "Erro ao abrir pasta do arquivo")
+
+def copiar_url_historico():
+    """Copia a URL do vídeo selecionado"""
+    selection = history_tree.selection()
+    if not selection:
+        messagebox.showwarning("Aviso", "Selecione um item do histórico")
+        return
+    
+    try:
+        item_id = history_tree.item(selection[0])['tags'][0]
+        download_data = db_manager.get_download_by_id(item_id)
+        
+        if download_data and download_data.get('url'):
+            root.clipboard_clear()
+            root.clipboard_append(download_data['url'])
+            messagebox.showinfo("Sucesso", "URL copiada para a área de transferência")
+            log_info("URL copiada do histórico")
+        else:
+            messagebox.showerror("Erro", "URL não disponível")
+    except Exception as e:
+        log_error(e, "Erro ao copiar URL")
+        messagebox.showerror("Erro", "Erro ao copiar URL")
+
+def remover_item_historico():
+    """Remove item específico do histórico"""
+    selection = history_tree.selection()
+    if not selection:
+        messagebox.showwarning("Aviso", "Selecione um item do histórico")
+        return
+    
+    try:
+        # Obter título para confirmação
+        item_values = history_tree.item(selection[0])['values']
+        titulo = item_values[1] if len(item_values) > 1 else "Item selecionado"
+        
+        resposta = messagebox.askyesno(
+            "Confirmar Remoção", 
+            f"Deseja remover este item do histórico?\n\n{titulo}\n\n⚠️ Esta ação não pode ser desfeita."
+        )
+        if resposta:
+            item_id = history_tree.item(selection[0])['tags'][0]
+            db_manager.remove_download(item_id)
+            atualizar_historico()
+            messagebox.showinfo("Sucesso", "Item removido do histórico")
+            log_info(f"Item removido do histórico: {titulo}")
+    except Exception as e:
+        log_error(e, "Erro ao remover item")
+        messagebox.showerror("Erro", "Erro ao remover item do histórico")
+
+def redownload_video():
+    """Recarrega a URL na aba principal para novo download"""
+    selection = history_tree.selection()
+    if not selection:
+        messagebox.showwarning("Aviso", "Selecione um item do histórico")
+        return
+    
+    try:
+        item_id = history_tree.item(selection[0])['tags'][0]
+        download_data = db_manager.get_download_by_id(item_id)
+        
+        if download_data and download_data.get('url'):
+            # Mudar para aba principal
+            notebook.select(0)
+            # Limpar e inserir URL
+            url_entry.delete(0, tk.END)
+            url_entry.insert(0, download_data['url'])
+            # Limpar informações anteriores
+            resolutions_listbox.delete(0, tk.END)
+            metadata_text.delete("1.0", tk.END)
+            baixar_button.config(state=tk.DISABLED)
+            
+            messagebox.showinfo("Sucesso", "URL carregada na aba principal\n\nClique em 'Extrair informações' para continuar")
+            log_info(f"URL recarregada: {download_data['url']}")
+        else:
+            messagebox.showerror("Erro", "URL não disponível")
+    except Exception as e:
+        log_error(e, "Erro ao recarregar vídeo")
+        messagebox.showerror("Erro", "Erro ao recarregar vídeo")
+
+def sair_aplicacao():
+    """Função para sair da aplicação com confirmação"""
+    global is_downloading
+    
+    # Verificar se há download em andamento
+    if is_downloading:
+        resposta = messagebox.askyesno(
+            "Download em Andamento", 
+            "Há um download em andamento. Deseja realmente sair?\n\n"
+            "⚠️ Atenção: O download será interrompido e os arquivos podem ficar incompletos."
+        )
+        if not resposta:
+            return
+    
+    # Confirmar saída
+    resposta = messagebox.askyesno("Confirmar Saída", "Deseja realmente sair da aplicação?")
+    if resposta:
+        log_info("Aplicação encerrada pelo usuário")
+        root.quit()
+        root.destroy()
+
+# Criar aba do histórico
+criar_aba_historico()
+
+# Chamar antes de root.mainloop()
+initialize_app()
 root.mainloop()
