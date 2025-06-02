@@ -516,10 +516,39 @@ progress_label.pack()
 diretorio_button = tk.Button(root, text="Selecionar Diretório", command=selecionar_diretorio)
 diretorio_button.grid(row=5, column=0, columnspan=2, pady=5)
 
+def sair_aplicacao():
+    """Função para sair da aplicação com confirmação"""
+    global is_downloading
+    
+    # Verificar se há download em andamento
+    if is_downloading:
+        resposta = messagebox.askyesno(
+            "Download em Andamento", 
+            "Há um download em andamento. Deseja realmente sair?\n\n"
+            "⚠️ Atenção: O download será interrompido e os arquivos podem ficar incompletos."
+        )
+        if not resposta:
+            return
+    
+    # Confirmar saída
+    resposta = messagebox.askyesno("Confirmar Saída", "Deseja realmente sair da aplicação?")
+    if resposta:
+        log_info("Aplicação encerrada pelo usuário")
+        root.quit()
+        root.destroy()
+
 # CORRIGIR: Label do diretório com melhor configuração
 diretorio_label = tk.Label(root, text="Diretório: Nenhum selecionado", 
                           wraplength=800, justify='left')  # Quebra de linha automática
 diretorio_label.grid(row=6, column=0, columnspan=2, sticky='ew', padx=10)
+
+# NOVO: Botão Sair
+sair_button = tk.Button(root, text="Sair", command=sair_aplicacao, 
+                       bg="#ff6b6b", fg="white", font=("Arial", 10, "bold"))
+sair_button.grid(row=7, column=0, columnspan=2, pady=10)
+
+# Configurar protocolo de fechamento da janela
+root.protocol("WM_DELETE_WINDOW", sair_aplicacao)
 
 # Log inicial
 log_info("Aplicação iniciada")
