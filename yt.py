@@ -5,6 +5,7 @@ from tkinter import messagebox, filedialog, ttk
 import yt_dlp
 import threading
 import logging
+import json
 from datetime import datetime
 
 # Configurar logging
@@ -19,6 +20,7 @@ info = None
 
 # Variable to store the selected download directory
 download_directory = ""
+download_dir = ""  # Adicionar esta linha para compatibilidade
 
 # Threading control
 download_thread = None
@@ -302,6 +304,53 @@ def baixar_video():
     progress_label.config(text="Preparando download...")
     root.update_idletasks()  # Forçar atualização da interface
     
+    # Download concluído com sucesso
+    def download_success():
+        """Callback para download bem-sucedido"""
+        global is_downloading
+        
+        # Mostrar 100% apenas quando tudo estiver realmente concluído
+        root.after(0, lambda: update_progress_ui(100, "100%", "Concluído!", "Finalizado"))
+        
+        # NOVO: Adicionar ao histórico
+        try:
+            url = url_entry.get().strip()
+            title = info.get('title', 'Vídeo sem título') if info else 'Vídeo'
+            selected_index = resolutions_listbox.curselection()
+            resolution = resolutions_listbox.get(selected_index) if selected_index else 'N/A'
+            
+            # Estimar caminho do arquivo
+            safe_title = "".join(c for c in title if c.isalnum() or c in (' ', '-', '_')).rstrip()
+            file_path = os.path.join(download_directory, f"{safe_title}.mp4")
+            
+            # Obter tamanho do arquivo se existir
+            file_size = None
+            if os.path.exists(file_path):
+                file_size = os.path.getsize(file_path)
+            
+            # Adicionar ao histórico
+            history_manager.add_download(url, title, resolution, file_path, file_size)
+            
+            # Atualizar aba de histórico se estiver visível
+            if 'history_tree' in globals():
+                atualizar_historico()
+                    
+        except Exception as e:
+            log_error(e, "Erro ao adicionar download ao histórico")
+            
+        # Aguardar um pouco para o usuário ver o 100%
+        def finalize_ui():
+            global is_downloading
+            is_downloading = False
+            baixar_button.config(state=tk.NORMAL, text="Baixar vídeo")
+            progress_frame.grid_remove()  # Ocultar barra de progresso
+            messagebox.showinfo("Sucesso", "Download concluído com sucesso!")
+            log_info("Download concluído com sucesso")
+            habilitar_botao_download()
+        
+        # Aguardar 1 segundo antes de finalizar a UI
+        root.after(1000, finalize_ui)
+
     def download_worker():
         global is_downloading
         try:
@@ -322,9 +371,8 @@ def baixar_video():
                 'merge_output_format': 'mp4',
                 'ffmpeg_location': ffmpeg_path,
                 'progress_hooks': [progress_hook],
-                'postprocessor_hooks': [postprocessor_hook],  # NOVO: Hook para merge
+                'postprocessor_hooks': [postprocessor_hook],
                 'quiet': False,
-                # Configurações para melhor tratamento de erros
                 'retries': 10,
                 'fragment_retries': 10,
                 'skip_unavailable_fragments': True,
@@ -337,8 +385,8 @@ def baixar_video():
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 ydl.download([url])
             
-            # Download concluído com sucesso
-            root.after(0, download_success)
+            # CORRIGIDO: Chamar download_success após o download ser concluído
+            download_success()
             
         except Exception as e:
             error_msg = log_error(e, "Erro durante download")
@@ -349,26 +397,6 @@ def baixar_video():
     # Executar download em thread separada
     download_thread = threading.Thread(target=download_worker, daemon=True)
     download_thread.start()
-
-def download_success():
-    """Callback para download bem-sucedido"""
-    global is_downloading
-    
-    # Mostrar 100% apenas quando tudo estiver realmente concluído
-    root.after(0, lambda: update_progress_ui(100, "100%", "Concluído!", "Finalizado"))
-    
-    # Aguardar um pouco para o usuário ver o 100%
-    def finalize_ui():
-        global is_downloading
-        is_downloading = False
-        baixar_button.config(state=tk.NORMAL, text="Baixar vídeo")
-        progress_frame.grid_remove()  # Ocultar barra de progresso
-        messagebox.showinfo("Sucesso", "Download concluído com sucesso!")
-        log_info("Download concluído com sucesso")
-        habilitar_botao_download()
-    
-    # Aguardar 2 segundos antes de finalizar a UI
-    root.after(2000, finalize_ui)
 
 def download_error(error_msg):
     """Callback para erro no download"""
@@ -391,130 +419,212 @@ def mostrar_menu(event):
     menu.post(event.x_root, event.y_root)
 
 def colar_texto():
+    """Cola texto da área de transferência no campo URL"""
     try:
-        url = root.clipboard_get()
+        # Limpa o campo atual
         url_entry.delete(0, tk.END)
-        url_entry.insert(tk.INSERT, url)
-        log_info("URL colada da área de transferência")
+        # Cola o texto da área de transferência
+        texto_colado = root.clipboard_get()
+        url_entry.insert(0, texto_colado)
+        print(f"[INFO] Texto colado: {texto_colado[:50]}{'...' if len(texto_colado) > 50 else ''}")
     except tk.TclError:
-        pass
-
-def selecionar_diretorio():
-    global download_directory
-    download_directory = filedialog.askdirectory()
-    if download_directory:
-        # Truncar caminho se muito longo
-        display_path = download_directory
-        if len(display_path) > 80:
-            display_path = "..." + display_path[-77:]
-        
-        diretorio_label.config(text=f"Diretório: {display_path}")
-        habilitar_botao_download()
-        log_info(f"Diretório selecionado: {download_directory}")
-
-def resolucao_selecionada(event):
-    habilitar_botao_download()
+        print("[AVISO] Área de transferência vazia ou inacessível")
+    except Exception as e:
+        print(f"[ERRO] Erro ao colar texto: {e}")
 
 def habilitar_botao_download():
-    """Habilita o botão de download quando todas as condições são atendidas"""
+    """Verifica se o botão de download pode ser habilitado"""
     try:
-        # Verificar condições de forma mais flexível
-        has_selection = bool(resolutions_listbox.curselection())
-        has_directory = bool(download_directory)
-        has_info = info is not None
-        not_downloading = not is_downloading
-        
-        # Debug detalhado
-        log_info(f"Verificando condições - Seleção: {has_selection}, Diretório: {has_directory}, Info: {has_info}, Não baixando: {not_downloading}")
-        if has_info:
-            log_info(f"Título do vídeo: {info.get('title', 'N/A')}")
-        
-        if has_selection and has_directory and has_info and not_downloading:
+        # Verifica se há informações extraídas e uma resolução selecionada
+        if info and resolutions_listbox.curselection():
             baixar_button.config(state=tk.NORMAL)
-            log_info("✅ Botão de download habilitado")
+            print("[INFO] Botão de download habilitado")
         else:
             baixar_button.config(state=tk.DISABLED)
-            # Log das condições não atendidas
-            missing = []
-            if not has_selection: missing.append("resolução")
-            if not has_directory: missing.append("diretório")
-            if not has_info: missing.append("informações do vídeo")
-            if not not_downloading: missing.append("download em andamento")
-            if missing:
-                log_info(f"❌ Botão desabilitado - Faltando: {', '.join(missing)}")
-                
+            print("[INFO] Botão de download desabilitado - faltam informações")
     except Exception as e:
-        log_error(e, "Erro ao habilitar botão de download")
+        print(f"[ERRO] Erro ao habilitar botão: {e}")
         baixar_button.config(state=tk.DISABLED)
 
-# Criar janela principal
-root = tk.Tk()
-root.title("Baixador de Vídeos do YouTube v2.0")
-root.geometry("900x700")  # AUMENTAR altura e largura
-root.minsize(800, 600)  # Tamanho mínimo
+def resolucao_selecionada(event):
+    """Callback quando uma resolução é selecionada na listbox"""
+    try:
+        selection = resolutions_listbox.curselection()
+        if selection:
+            index = selection[0]
+            resolucao = resolutions_listbox.get(index)
+            print(f"[INFO] Resolução selecionada: {resolucao}")
+            
+            # Habilita o botão de download se uma resolução foi selecionada
+            habilitar_botao_download()
+            
+    except Exception as e:
+        print(f"[ERRO] Erro ao selecionar resolução: {e}")
 
-# Configuração do grid com padding e pesos
-for i in range(8):  # 8 linhas no layout
-    if i == 2:  # Linha dos frames principais (resoluções e metadados)
-        root.rowconfigure(i, weight=1, pad=10)  # Expandir esta linha
-    else:
-        root.rowconfigure(i, pad=10)
+def selecionar_diretorio():
+    """Abre diálogo para seleção de diretório de download"""
+    global download_dir, download_directory  # Declarar ambas as variáveis
+    
+    try:
+        from tkinter import filedialog
         
-for i in range(2):
-    root.columnconfigure(i, weight=1, pad=10)  # Ambas colunas expandem
+        # Abre o diálogo de seleção de pasta
+        diretorio = filedialog.askdirectory(
+            title="Selecionar Diretório de Download",
+            initialdir=download_dir or download_directory or "."
+        )
+        
+        if diretorio:  # Se o usuário selecionou um diretório
+            download_dir = diretorio
+            download_directory = diretorio  # Manter compatibilidade
+            
+            # Atualiza o label com o novo diretório
+            diretorio_label.config(text=f"Diretório: {diretorio}")
+            
+            print(f"[INFO] Diretório de download alterado para: {diretorio}")
+            
+            # Revalida o estado do botão de download
+            habilitar_botao_download()
+        else:
+            print("[INFO] Seleção de diretório cancelada")
+            
+    except Exception as e:
+        print(f"[ERRO] Erro ao selecionar diretório: {e}")
 
-# URL Input
-url_label = tk.Label(root, text="URL do vídeo:")
-url_label.grid(row=0, column=0, sticky='w')
-url_entry = tk.Entry(root, width=50)
-url_entry.grid(row=0, column=1, sticky='ew')
+def criar_aba_historico():
+    """Cria aba do histórico de downloads"""
+    global history_frame, history_tree
+    
+    # Frame principal do histórico
+    history_frame = tk.Frame(notebook)
+    notebook.add(history_frame, text="📋 Histórico")
+    
+    # Título e controles
+    title_frame = tk.Frame(history_frame)
+    title_frame.pack(fill=tk.X, padx=10, pady=5)
+    
+    tk.Label(title_frame, text="Histórico de Downloads", 
+             font=("Arial", 14, "bold")).pack(side=tk.LEFT)
+    
+    # Botões de controle
+    controls_frame = tk.Frame(title_frame)
+    controls_frame.pack(side=tk.RIGHT)
+    
+    tk.Button(controls_frame, text="🔄 Atualizar", 
+              command=atualizar_historico).pack(side=tk.LEFT, padx=2)
+    tk.Button(controls_frame, text="🗑️ Limpar Tudo", 
+              command=limpar_historico).pack(side=tk.LEFT, padx=2)
+    tk.Button(controls_frame, text="📁 Abrir Pasta", 
+              command=abrir_pasta_download).pack(side=tk.LEFT, padx=2)
+    
+    # Treeview para mostrar histórico
+    tree_frame = tk.Frame(history_frame)
+    tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+    
+    # Configurar colunas
+    columns = ('Data', 'Título', 'Resolução', 'Status', 'Tamanho')
+    history_tree = ttk.Treeview(tree_frame, columns=columns, show='headings', height=15)
+    
+    # Configurar cabeçalhos
+    history_tree.heading('Data', text='Data/Hora')
+    history_tree.heading('Título', text='Título do Vídeo')
+    history_tree.heading('Resolução', text='Resolução')
+    history_tree.heading('Status', text='Status')
+    history_tree.heading('Tamanho', text='Tamanho')
+    
+    # Configurar larguras das colunas
+    history_tree.column('Data', width=150)
+    history_tree.column('Título', width=400)
+    history_tree.column('Resolução', width=100)
+    history_tree.column('Status', width=100)
+    history_tree.column('Tamanho', width=100)
+    
+    # Scrollbars
+    v_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=history_tree.yview)
+    h_scrollbar = ttk.Scrollbar(tree_frame, orient=tk.HORIZONTAL, command=history_tree.xview)
+    history_tree.configure(yscrollcommand=v_scrollbar.set, xscrollcommand=h_scrollbar.set)
+    
+    # Pack treeview e scrollbars
+    history_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+    v_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    h_scrollbar.pack(side=tk.BOTTOM, fill=tk.X)
+    
+    # Menu de contexto
+    history_menu = tk.Menu(root, tearoff=0)
+    history_menu.add_command(label="🔄 Redownload", command=redownload_video)
+    history_menu.add_command(label="📁 Abrir Arquivo", command=abrir_arquivo)
+    history_menu.add_command(label="📋 Copiar URL", command=copiar_url)
+    history_menu.add_command(label="🗑️ Remover", command=remover_do_historico)
+    
+    def mostrar_menu_historico(event):
+        try:
+            history_menu.post(event.x_root, event.y_root)
+        except:
+            pass
+    
+    history_tree.bind("<Button-3>", mostrar_menu_historico)
+    
+    # Carregar dados iniciais
+    atualizar_historico()
 
-# Create right-click menu
-menu = tk.Menu(root, tearoff=0)
-menu.add_command(label="Colar", command=colar_texto)
-url_entry.bind("<Button-3>", mostrar_menu)
+def atualizar_historico():
+    """Atualiza a exibição do histórico"""
+    try:
+        # Limpar treeview
+        for item in history_tree.get_children():
+            history_tree.delete(item)
+        
+        # Carregar dados recentes
+        recent_downloads = history_manager.get_recent_downloads()
+        
+        for download in recent_downloads:
+            # Formatar data
+            try:
+                dt = datetime.fromisoformat(download['timestamp'])
+                data_formatada = dt.strftime('%d/%m/%Y %H:%M')
+            except:
+                data_formatada = download.get('timestamp', 'N/A')
+            
+            # Formatar tamanho
+            tamanho = download.get('file_size', 'N/A')
+            if isinstance(tamanho, (int, float)):
+                if tamanho > 1024*1024*1024:  # GB
+                    tamanho = f"{tamanho/(1024*1024*1024):.1f} GB"
+                elif tamanho > 1024*1024:  # MB
+                    tamanho = f"{tamanho/(1024*1024):.1f} MB"
+                else:
+                    tamanho = f"{tamanho/1024:.1f} KB"
+            
+            # Truncar título se muito longo
+            titulo = download.get('title', 'N/A')
+            if len(titulo) > 60:
+                titulo = titulo[:57] + "..."
+            
+            # Inserir no treeview
+            history_tree.insert('', 'end', values=(
+                data_formatada,
+                titulo,
+                download.get('resolution', 'N/A'),
+                download.get('status', 'N/A'),
+                tamanho
+            ), tags=(download.get('id'),))
+        
+        log_info(f"Histórico atualizado: {len(recent_downloads)} entradas")
+        
+    except Exception as e:
+        log_error(e, "Erro ao atualizar histórico")
 
-# Extract button
-extrair_button = tk.Button(root, text="Extrair informações", command=extrair_informacoes)
-extrair_button.grid(row=1, column=0, columnspan=2, pady=5)
-
-# Resolutions Frame
-resolutions_frame = tk.Frame(root)
-resolutions_frame.grid(row=2, column=0, sticky='nsew', padx=(0,5))  # Adicionar padding
-resolutions_label = tk.Label(resolutions_frame, text="Resoluções:")
-resolutions_label.pack()
-resolutions_listbox = tk.Listbox(resolutions_frame, height=10)  # Altura fixa
-resolutions_listbox.pack(fill=tk.BOTH, expand=True)
-resolutions_listbox.bind("<<ListboxSelect>>", resolucao_selecionada)
-
-# Metadata Frame
-metadata_frame = tk.Frame(root)
-metadata_frame.grid(row=2, column=1, sticky='nsew', padx=(5,0))  # Adicionar padding
-metadata_label = tk.Label(metadata_frame, text="Informações do Vídeo:")  # Adicionar label
-metadata_label.pack()
-metadata_text = tk.Text(metadata_frame, wrap=tk.WORD, width=40, height=10)  # Altura fixa
-metadata_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-scrollbar = tk.Scrollbar(metadata_frame)
-scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-metadata_text.config(yscrollcommand=scrollbar.set)
-scrollbar.config(command=metadata_text.yview)
-
-# Download Button
-baixar_button = tk.Button(root, text="Baixar vídeo", command=baixar_video, state=tk.DISABLED)
-baixar_button.grid(row=3, column=0, columnspan=2, pady=5)
-
-# Progress Frame (inicialmente oculto)
-# CORRIGIDO: Criação da barra de progresso com configuração adequada
-progress_frame = tk.Frame(root)
-# IMPORTANTE: Definir maximum=100 na criação
-progress_bar = ttk.Progressbar(progress_frame, length=400, mode='determinate', maximum=100)
-progress_bar.pack(fill=tk.X, pady=2)
-progress_label = tk.Label(progress_frame, text="")
-progress_label.pack()
-
-# Directory Selection
-diretorio_button = tk.Button(root, text="Selecionar Diretório", command=selecionar_diretorio)
-diretorio_button.grid(row=5, column=0, columnspan=2, pady=5)
+def limpar_historico():
+    """Limpa todo o histórico com confirmação"""
+    resposta = messagebox.askyesno(
+        "Confirmar Limpeza", 
+        "Deseja realmente limpar todo o histórico de downloads?\n\n"
+        "⚠️ Esta ação não pode ser desfeita."
+    )
+    if resposta:
+        history_manager.clear_history()
+        atualizar_historico()
+        messagebox.showinfo("Sucesso", "Histórico limpo com sucesso!")
 
 def sair_aplicacao():
     """Função para sair da aplicação com confirmação"""
@@ -537,13 +647,90 @@ def sair_aplicacao():
         root.quit()
         root.destroy()
 
+# Criar janela principal PRIMEIRO
+root = tk.Tk()
+root.title("Baixador de Vídeos do YouTube v2.1 - Histórico")
+root.geometry("1000x750")  # Aumentar tamanho para acomodar histórico
+root.minsize(900, 650)
+
+# Criar notebook (abas)
+notebook = ttk.Notebook(root)
+notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+# Aba principal (download)
+main_frame = tk.Frame(notebook)
+notebook.add(main_frame, text="📥 Download")
+
+# Configuração do grid com padding e pesos
+for i in range(8):  # 8 linhas no layout
+    if i == 2:  # Linha dos frames principais (resoluções e metadados)
+        main_frame.rowconfigure(i, weight=1, pad=10)  # Expandir esta linha
+    else:
+        main_frame.rowconfigure(i, pad=10)
+        
+for i in range(2):
+    main_frame.columnconfigure(i, weight=1, pad=10)  # Ambas colunas expandem
+
+# URL Input
+url_label = tk.Label(main_frame, text="URL do vídeo:")
+url_label.grid(row=0, column=0, sticky='w')
+url_entry = tk.Entry(main_frame, width=50)
+url_entry.grid(row=0, column=1, sticky='ew')
+
+# Create right-click menu
+menu = tk.Menu(root, tearoff=0)
+menu.add_command(label="Colar", command=colar_texto)
+url_entry.bind("<Button-3>", mostrar_menu)
+
+# Extract button
+extrair_button = tk.Button(main_frame, text="Extrair informações", command=extrair_informacoes)
+extrair_button.grid(row=1, column=0, columnspan=2, pady=5)
+
+# Resolutions Frame
+resolutions_frame = tk.Frame(main_frame)
+resolutions_frame.grid(row=2, column=0, sticky='nsew', padx=(0,5))  # Adicionar padding
+resolutions_label = tk.Label(resolutions_frame, text="Resoluções:")
+resolutions_label.pack()
+resolutions_listbox = tk.Listbox(resolutions_frame, height=10)  # Altura fixa
+resolutions_listbox.pack(fill=tk.BOTH, expand=True)
+resolutions_listbox.bind("<<ListboxSelect>>", resolucao_selecionada)
+
+# Metadata Frame
+metadata_frame = tk.Frame(main_frame)
+metadata_frame.grid(row=2, column=1, sticky='nsew', padx=(5,0))  # Adicionar padding
+metadata_label = tk.Label(metadata_frame, text="Informações do Vídeo:")  # Adicionar label
+metadata_label.pack()
+metadata_text = tk.Text(metadata_frame, wrap=tk.WORD, width=40, height=10)  # Altura fixa
+metadata_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+scrollbar = tk.Scrollbar(metadata_frame)
+scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+metadata_text.config(yscrollcommand=scrollbar.set)
+scrollbar.config(command=metadata_text.yview)
+
+# Download Button
+baixar_button = tk.Button(main_frame, text="Baixar vídeo", command=baixar_video, state=tk.DISABLED)
+baixar_button.grid(row=3, column=0, columnspan=2, pady=5)
+
+# Progress Frame (inicialmente oculto)
+# CORRIGIDO: Criação da barra de progresso com configuração adequada
+progress_frame = tk.Frame(main_frame)
+# IMPORTANTE: Definir maximum=100 na criação
+progress_bar = ttk.Progressbar(progress_frame, length=400, mode='determinate', maximum=100)
+progress_bar.pack(fill=tk.X, pady=2)
+progress_label = tk.Label(progress_frame, text="")
+progress_label.pack()
+
+# Directory Selection
+diretorio_button = tk.Button(main_frame, text="Selecionar Diretório", command=selecionar_diretorio)
+diretorio_button.grid(row=5, column=0, columnspan=2, pady=5)
+
 # CORRIGIR: Label do diretório com melhor configuração
-diretorio_label = tk.Label(root, text="Diretório: Nenhum selecionado", 
+diretorio_label = tk.Label(main_frame, text="Diretório: Nenhum selecionado", 
                           wraplength=800, justify='left')  # Quebra de linha automática
 diretorio_label.grid(row=6, column=0, columnspan=2, sticky='ew', padx=10)
 
 # NOVO: Botão Sair
-sair_button = tk.Button(root, text="Sair", command=sair_aplicacao, 
+sair_button = tk.Button(main_frame, text="Sair", command=sair_aplicacao, 
                        bg="#ff6b6b", fg="white", font=("Arial", 10, "bold"))
 sair_button.grid(row=7, column=0, columnspan=2, pady=10)
 
@@ -553,18 +740,5 @@ root.protocol("WM_DELETE_WINDOW", sair_aplicacao)
 # Log inicial
 log_info("Aplicação iniciada")
 
-# Iniciar loop principal
+# Executar aplicação
 root.mainloop()
-
-# https://www.youtube.com/watch?v=6ywMN2N47Mc
-# https://www.youtube.com/watch?v=pJT6JBJyqFc
-# https://www.youtube.com/watch?v=MflImOTUjMw
-
-def debug_state():
-    """Função para debug do estado atual"""
-    print(f"Info disponível: {info is not None}")
-    print(f"Diretório selecionado: {download_directory}")
-    print(f"Resolução selecionada: {bool(resolutions_listbox.curselection())}")
-    print(f"Download em andamento: {is_downloading}")
-    if info:
-        print(f"Título do vídeo: {info.get('title', 'N/A')}")
