@@ -305,45 +305,57 @@ def baixar_video():
     progress_label.config(text="Preparando download...")
     root.update_idletasks()  # Forçar atualização da interface
     
-    def download_success():
-        """Função chamada quando o download é concluído com sucesso"""
-        global info, db_manager
+def verificar_auto_open_folder():
+    """Verifica se deve abrir pasta automaticamente após download"""
+    try:
+        auto_open = db_manager.get_setting('auto_open_folder', 'false')
+        if auto_open.lower() == 'true' and download_directory and os.path.exists(download_directory):
+            os.startfile(download_directory)
+            log_info("Pasta aberta automaticamente após download")
+    except Exception as e:
+        log_error(e, "Erro ao abrir pasta automaticamente")
+
+def download_success():
+    """Função chamada quando o download é concluído com sucesso"""
+    global info, db_manager
+    
+    try:
+        # Atualizar UI para 100%
+        progress_bar['value'] = 100
+        progress_label.config(text="Download concluído!")
+        root.update()
         
-        try:
-            # Atualizar UI para 100%
-            progress_bar['value'] = 100
-            progress_label.config(text="Download concluído!")
-            root.update()
+        # Salvar no histórico do banco de dados
+        if info:
+            download_data = {
+                'url': url_entry.get(),
+                'title': info.get('title', 'Título não disponível'),
+                'duration': info.get('duration_string', 'N/A'),
+                'resolution': resolucao_var.get(),
+                'file_size': info.get('filesize_approx', 0),
+                'download_path': download_directory,
+                'status': 'completed',
+                'thumbnail_url': info.get('thumbnail'),
+                'uploader': info.get('uploader', 'N/A'),
+                'view_count': info.get('view_count', 0),
+                'like_count': info.get('like_count', 0),
+                'description': info.get('description', '')
+            }
             
-            # Salvar no histórico do banco de dados
-            if info:
-                download_data = {
-                    'url': url_entry.get(),
-                    'title': info.get('title', 'Título não disponível'),
-                    'duration': info.get('duration_string', 'N/A'),
-                    'resolution': resolucao_var.get(),
-                    'file_size': info.get('filesize_approx', 0),
-                    'download_path': download_directory,
-                    'status': 'completed',
-                    'thumbnail_url': info.get('thumbnail'),
-                    'uploader': info.get('uploader', 'N/A'),
-                    'view_count': info.get('view_count', 0),
-                    'like_count': info.get('like_count', 0),
-                    'description': info.get('description', '')
-                }
-                
-                try:
-                    download_id = db_manager.add_download(download_data)
-                    log_info(f"Download salvo no histórico com ID: {download_id}")
-                except Exception as e:
-                    log_error(e, "Erro ao salvar download no histórico")
-            
-            # Finalizar UI após 2 segundos
-            root.after(2000, finalize_ui)
-            
-        except Exception as e:
-            log_error(e, "Erro em download_success")
-            
+            try:
+                download_id = db_manager.add_download(download_data)
+                log_info(f"Download salvo no histórico com ID: {download_id}")
+            except Exception as e:
+                log_error(e, "Erro ao salvar download no histórico")
+        
+        # Verificar se deve abrir pasta automaticamente
+        verificar_auto_open_folder()
+        
+        # Finalizar UI após 2 segundos
+        root.after(2000, finalize_ui)
+        
+    except Exception as e:
+        log_error(e, "Erro em download_success")
         def finalize_ui():
             global is_downloading
             is_downloading = False
@@ -497,6 +509,199 @@ def selecionar_diretorio():
                 
     except Exception as e:
         print(f"[ERRO] Erro ao selecionar diretório: {e}")
+
+def criar_aba_configuracoes():
+    """Cria aba de configurações"""
+    config_frame = ttk.Frame(notebook)
+    notebook.add(config_frame, text="⚙️ Configurações")
+    
+    # Frame principal
+    main_frame = tk.Frame(config_frame)
+    main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    
+    # Seção: Downloads
+    downloads_frame = tk.LabelFrame(main_frame, text="Downloads", font=('Arial', 10, 'bold'))
+    downloads_frame.pack(fill=tk.X, pady=(0, 10))
+    
+    # Auto-abrir pasta
+    global auto_open_var
+    auto_open_var = tk.BooleanVar()
+    auto_open_check = tk.Checkbutton(
+        downloads_frame, 
+        text="Abrir pasta automaticamente após download",
+        variable=auto_open_var,
+        command=salvar_auto_open_config
+    )
+    auto_open_check.pack(anchor='w', padx=10, pady=5)
+    
+    # Carregar configuração atual
+    current_auto_open = db_manager.get_setting('auto_open_folder', 'false')
+    auto_open_var.set(current_auto_open.lower() == 'true')
+    
+    # Seção: Interface
+    interface_frame = tk.LabelFrame(main_frame, text="Interface", font=('Arial', 10, 'bold'))
+    interface_frame.pack(fill=tk.X, pady=(0, 10))
+    
+    # Tema
+    tk.Label(interface_frame, text="Tema:").pack(anchor='w', padx=10, pady=(5, 0))
+    
+    global theme_var
+    theme_var = tk.StringVar()
+    theme_frame = tk.Frame(interface_frame)
+    theme_frame.pack(anchor='w', padx=10, pady=5)
+    
+    tk.Radiobutton(theme_frame, text="Claro", variable=theme_var, 
+                   value="light", command=salvar_theme_config).pack(side=tk.LEFT)
+    tk.Radiobutton(theme_frame, text="Escuro", variable=theme_var, 
+                   value="dark", command=salvar_theme_config).pack(side=tk.LEFT, padx=(10, 0))
+    
+    # Carregar tema atual
+    current_theme = db_manager.get_setting('theme', 'light')
+    theme_var.set(current_theme)
+    
+    # Seção: Resolução Padrão
+    resolution_frame = tk.LabelFrame(main_frame, text="Qualidade", font=('Arial', 10, 'bold'))
+    resolution_frame.pack(fill=tk.X, pady=(0, 10))
+    
+    tk.Label(resolution_frame, text="Resolução padrão:").pack(anchor='w', padx=10, pady=(5, 0))
+    
+    resolution_config_frame = tk.Frame(resolution_frame)
+    resolution_config_frame.pack(anchor='w', padx=10, pady=5)
+    
+    global resolution_config_var
+    resolution_config_var = tk.StringVar()
+    resolution_combo = ttk.Combobox(
+        resolution_config_frame,
+        textvariable=resolution_config_var,
+        values=['144p', '240p', '360p', '480p', '720p', '1080p', 'best'],
+        state='readonly',
+        width=10
+    )
+    resolution_combo.pack(side=tk.LEFT)
+    resolution_combo.bind('<<ComboboxSelected>>', lambda e: salvar_resolution_config())
+    
+    # Carregar resolução atual
+    current_resolution = db_manager.get_setting('default_resolution', '1080p')
+    resolution_config_var.set(current_resolution)
+    
+    # Botão para aplicar mudanças
+    apply_frame = tk.Frame(main_frame)
+    apply_frame.pack(fill=tk.X, pady=(10, 0))
+    
+    tk.Button(apply_frame, text="💾 Salvar Configurações", 
+              command=aplicar_configuracoes, bg='#4CAF50', fg='white',
+              font=('Arial', 10, 'bold')).pack(side=tk.RIGHT)
+
+def salvar_auto_open_config():
+    """Salva configuração de auto-abrir pasta"""
+    try:
+        value = 'true' if auto_open_var.get() else 'false'
+        db_manager.set_setting('auto_open_folder', value)
+        log_info(f"Auto-abrir pasta: {value}")
+    except Exception as e:
+        log_error(e, "Erro ao salvar configuração auto-abrir")
+
+def salvar_theme_config():
+    """Salva configuração de tema"""
+    try:
+        theme = theme_var.get()
+        db_manager.set_setting('theme', theme)
+        aplicar_tema(theme)
+        log_info(f"Tema alterado para: {theme}")
+    except Exception as e:
+        log_error(e, "Erro ao salvar tema")
+
+def salvar_resolution_config():
+    """Salva configuração de resolução padrão"""
+    try:
+        resolution = resolution_config_var.get()
+        db_manager.set_setting('default_resolution', resolution)
+        resolucao_var.set(resolution)  # Atualiza a seleção principal
+        log_info(f"Resolução padrão alterada para: {resolution}")
+    except Exception as e:
+        log_error(e, "Erro ao salvar resolução padrão")
+
+def aplicar_tema(theme):
+    """Aplica o tema selecionado"""
+    try:
+        if theme == 'dark':
+            # Tema escuro
+            bg_color = '#2b2b2b'
+            fg_color = '#ffffff'
+            select_bg = '#404040'
+            active_bg = '#505050'
+            active_fg = '#ffffff'
+        else:
+            # Tema claro (padrão)
+            bg_color = '#f0f0f0'
+            fg_color = '#000000'
+            select_bg = '#e0e0e0'
+            active_bg = '#ffffff'
+            active_fg = '#000000'
+        
+        # Aplicar cores aos widgets principais
+        root.configure(bg=bg_color)
+        
+        # Atualizar estilo do notebook com configurações completas
+        style = ttk.Style()
+        
+        # Configurar o notebook principal
+        style.configure('TNotebook', background=bg_color, borderwidth=0)
+        
+        # Configurar as abas em diferentes estados
+        style.configure('TNotebook.Tab', 
+                       background=select_bg, 
+                       foreground=fg_color,
+                       padding=[10, 5],
+                       borderwidth=1)
+        
+        # Configurar aba ativa/selecionada
+        style.map('TNotebook.Tab',
+                 background=[('selected', active_bg), ('active', active_bg)],
+                 foreground=[('selected', active_fg), ('active', active_fg)],
+                 expand=[('selected', [1, 1, 1, 0])])
+        
+        # Aplicar tema aos frames das abas
+        for widget in [main_frame, config_frame, history_frame]:
+            if widget.winfo_exists():
+                widget.configure(bg=bg_color)
+                # Atualizar widgets filhos recursivamente
+                atualizar_widgets_tema(widget, bg_color, fg_color)
+        
+        log_info(f"Tema {theme} aplicado")
+        
+    except Exception as e:
+        log_error(e, "Erro ao aplicar tema")
+
+def atualizar_widgets_tema(parent, bg_color, fg_color):
+    """Atualiza recursivamente todos os widgets filhos com o tema"""
+    try:
+        for child in parent.winfo_children():
+            widget_class = child.winfo_class()
+            
+            if widget_class in ['Frame', 'Toplevel']:
+                child.configure(bg=bg_color)
+                atualizar_widgets_tema(child, bg_color, fg_color)
+            elif widget_class in ['Label', 'Button', 'Checkbutton', 'Radiobutton']:
+                try:
+                    child.configure(bg=bg_color, fg=fg_color)
+                except:
+                    pass  # Alguns widgets podem não suportar essas opções
+            elif widget_class == 'Entry':
+                try:
+                    child.configure(bg=bg_color, fg=fg_color, insertbackground=fg_color)
+                except:
+                    pass
+    except Exception as e:
+        log_error(e, "Erro ao atualizar widgets do tema")
+
+def aplicar_configuracoes():
+    """Aplica todas as configurações"""
+    try:
+        messagebox.showinfo("Sucesso", "Configurações salvas com sucesso!")
+        log_info("Configurações aplicadas")
+    except Exception as e:
+        log_error(e, "Erro ao aplicar configurações")
 
 def criar_aba_historico():
     """Cria aba do histórico de downloads"""
@@ -792,7 +997,7 @@ root.geometry("1000x750")  # Aumentar tamanho para acomodar histórico
 root.minsize(900, 650)
 
 # Criar variáveis tkinter
-resolucao_var = tk.StringVar(value="720p")  # Valor padrão
+resolucao_var = tk.StringVar(value="1080p")  # Valor padrão alterado para melhor qualidade
 
 # Criar notebook (abas)
 notebook = ttk.Notebook(root)
@@ -900,7 +1105,7 @@ def initialize_app():
             log_info(f"Diretório padrão carregado: {download_directory}")
         
         # Carregar resolução padrão
-        default_resolution = db_manager.get_setting('default_resolution', '720p')
+        default_resolution = db_manager.get_setting('default_resolution', '1080p')
         if default_resolution in ['144p', '240p', '360p', '480p', '720p', '1080p', 'best']:
             resolucao_var.set(default_resolution)
             log_info(f"Resolução padrão carregada: {default_resolution}")
@@ -1006,6 +1211,199 @@ def selecionar_diretorio():
                 
     except Exception as e:
         print(f"[ERRO] Erro ao selecionar diretório: {e}")
+
+def criar_aba_configuracoes():
+    """Cria aba de configurações"""
+    config_frame = ttk.Frame(notebook)
+    notebook.add(config_frame, text="⚙️ Configurações")
+    
+    # Frame principal
+    main_frame = tk.Frame(config_frame)
+    main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+    
+    # Seção: Downloads
+    downloads_frame = tk.LabelFrame(main_frame, text="Downloads", font=('Arial', 10, 'bold'))
+    downloads_frame.pack(fill=tk.X, pady=(0, 10))
+    
+    # Auto-abrir pasta
+    global auto_open_var
+    auto_open_var = tk.BooleanVar()
+    auto_open_check = tk.Checkbutton(
+        downloads_frame, 
+        text="Abrir pasta automaticamente após download",
+        variable=auto_open_var,
+        command=salvar_auto_open_config
+    )
+    auto_open_check.pack(anchor='w', padx=10, pady=5)
+    
+    # Carregar configuração atual
+    current_auto_open = db_manager.get_setting('auto_open_folder', 'false')
+    auto_open_var.set(current_auto_open.lower() == 'true')
+    
+    # Seção: Interface
+    interface_frame = tk.LabelFrame(main_frame, text="Interface", font=('Arial', 10, 'bold'))
+    interface_frame.pack(fill=tk.X, pady=(0, 10))
+    
+    # Tema
+    tk.Label(interface_frame, text="Tema:").pack(anchor='w', padx=10, pady=(5, 0))
+    
+    global theme_var
+    theme_var = tk.StringVar()
+    theme_frame = tk.Frame(interface_frame)
+    theme_frame.pack(anchor='w', padx=10, pady=5)
+    
+    tk.Radiobutton(theme_frame, text="Claro", variable=theme_var, 
+                   value="light", command=salvar_theme_config).pack(side=tk.LEFT)
+    tk.Radiobutton(theme_frame, text="Escuro", variable=theme_var, 
+                   value="dark", command=salvar_theme_config).pack(side=tk.LEFT, padx=(10, 0))
+    
+    # Carregar tema atual
+    current_theme = db_manager.get_setting('theme', 'light')
+    theme_var.set(current_theme)
+    
+    # Seção: Resolução Padrão
+    resolution_frame = tk.LabelFrame(main_frame, text="Qualidade", font=('Arial', 10, 'bold'))
+    resolution_frame.pack(fill=tk.X, pady=(0, 10))
+    
+    tk.Label(resolution_frame, text="Resolução padrão:").pack(anchor='w', padx=10, pady=(5, 0))
+    
+    resolution_config_frame = tk.Frame(resolution_frame)
+    resolution_config_frame.pack(anchor='w', padx=10, pady=5)
+    
+    global resolution_config_var
+    resolution_config_var = tk.StringVar()
+    resolution_combo = ttk.Combobox(
+        resolution_config_frame,
+        textvariable=resolution_config_var,
+        values=['144p', '240p', '360p', '480p', '720p', '1080p', 'best'],
+        state='readonly',
+        width=10
+    )
+    resolution_combo.pack(side=tk.LEFT)
+    resolution_combo.bind('<<ComboboxSelected>>', lambda e: salvar_resolution_config())
+    
+    # Carregar resolução atual
+    current_resolution = db_manager.get_setting('default_resolution', '1080p')
+    resolution_config_var.set(current_resolution)
+    
+    # Botão para aplicar mudanças
+    apply_frame = tk.Frame(main_frame)
+    apply_frame.pack(fill=tk.X, pady=(10, 0))
+    
+    tk.Button(apply_frame, text="💾 Salvar Configurações", 
+              command=aplicar_configuracoes, bg='#4CAF50', fg='white',
+              font=('Arial', 10, 'bold')).pack(side=tk.RIGHT)
+
+def salvar_auto_open_config():
+    """Salva configuração de auto-abrir pasta"""
+    try:
+        value = 'true' if auto_open_var.get() else 'false'
+        db_manager.set_setting('auto_open_folder', value)
+        log_info(f"Auto-abrir pasta: {value}")
+    except Exception as e:
+        log_error(e, "Erro ao salvar configuração auto-abrir")
+
+def salvar_theme_config():
+    """Salva configuração de tema"""
+    try:
+        theme = theme_var.get()
+        db_manager.set_setting('theme', theme)
+        aplicar_tema(theme)
+        log_info(f"Tema alterado para: {theme}")
+    except Exception as e:
+        log_error(e, "Erro ao salvar tema")
+
+def salvar_resolution_config():
+    """Salva configuração de resolução padrão"""
+    try:
+        resolution = resolution_config_var.get()
+        db_manager.set_setting('default_resolution', resolution)
+        resolucao_var.set(resolution)  # Atualiza a seleção principal
+        log_info(f"Resolução padrão alterada para: {resolution}")
+    except Exception as e:
+        log_error(e, "Erro ao salvar resolução padrão")
+
+def aplicar_tema(theme):
+    """Aplica o tema selecionado"""
+    try:
+        if theme == 'dark':
+            # Tema escuro
+            bg_color = '#2b2b2b'
+            fg_color = '#ffffff'
+            select_bg = '#404040'
+            active_bg = '#505050'
+            active_fg = '#ffffff'
+        else:
+            # Tema claro (padrão)
+            bg_color = '#f0f0f0'
+            fg_color = '#000000'
+            select_bg = '#e0e0e0'
+            active_bg = '#ffffff'
+            active_fg = '#000000'
+        
+        # Aplicar cores aos widgets principais
+        root.configure(bg=bg_color)
+        
+        # Atualizar estilo do notebook com configurações completas
+        style = ttk.Style()
+        
+        # Configurar o notebook principal
+        style.configure('TNotebook', background=bg_color, borderwidth=0)
+        
+        # Configurar as abas em diferentes estados
+        style.configure('TNotebook.Tab', 
+                       background=select_bg, 
+                       foreground=fg_color,
+                       padding=[10, 5],
+                       borderwidth=1)
+        
+        # Configurar aba ativa/selecionada
+        style.map('TNotebook.Tab',
+                 background=[('selected', active_bg), ('active', active_bg)],
+                 foreground=[('selected', active_fg), ('active', active_fg)],
+                 expand=[('selected', [1, 1, 1, 0])])
+        
+        # Aplicar tema aos frames das abas
+        for widget in [main_frame, config_frame, history_frame]:
+            if widget.winfo_exists():
+                widget.configure(bg=bg_color)
+                # Atualizar widgets filhos recursivamente
+                atualizar_widgets_tema(widget, bg_color, fg_color)
+        
+        log_info(f"Tema {theme} aplicado")
+        
+    except Exception as e:
+        log_error(e, "Erro ao aplicar tema")
+
+def atualizar_widgets_tema(parent, bg_color, fg_color):
+    """Atualiza recursivamente todos os widgets filhos com o tema"""
+    try:
+        for child in parent.winfo_children():
+            widget_class = child.winfo_class()
+            
+            if widget_class in ['Frame', 'Toplevel']:
+                child.configure(bg=bg_color)
+                atualizar_widgets_tema(child, bg_color, fg_color)
+            elif widget_class in ['Label', 'Button', 'Checkbutton', 'Radiobutton']:
+                try:
+                    child.configure(bg=bg_color, fg=fg_color)
+                except:
+                    pass  # Alguns widgets podem não suportar essas opções
+            elif widget_class == 'Entry':
+                try:
+                    child.configure(bg=bg_color, fg=fg_color, insertbackground=fg_color)
+                except:
+                    pass
+    except Exception as e:
+        log_error(e, "Erro ao atualizar widgets do tema")
+
+def aplicar_configuracoes():
+    """Aplica todas as configurações"""
+    try:
+        messagebox.showinfo("Sucesso", "Configurações salvas com sucesso!")
+        log_info("Configurações aplicadas")
+    except Exception as e:
+        log_error(e, "Erro ao aplicar configurações")
 
 def criar_aba_historico():
     """Cria aba do histórico de downloads"""
@@ -1296,6 +1694,13 @@ def sair_aplicacao():
 
 # Criar aba do histórico
 criar_aba_historico()
+
+# Criar aba de configurações
+criar_aba_configuracoes()
+
+# Declarar variáveis globais para frames das abas
+config_frame = None
+history_frame = None
 
 # Chamar antes de root.mainloop()
 initialize_app()

@@ -110,7 +110,8 @@ class DatabaseSchema:
             """
             INSERT OR IGNORE INTO settings (key, value, description) VALUES 
             ('default_download_path', '', 'Diretório padrão para downloads'),
-            ('default_resolution', '720p', 'Resolução padrão para downloads'),
+            # Modificar linha 113 para usar 1080p como padrão
+            ('default_resolution', '1080p', 'Resolução padrão para downloads'),
             ('auto_open_folder', 'false', 'Abrir pasta após download'),
             ('theme', 'light', 'Tema da interface')
             """
