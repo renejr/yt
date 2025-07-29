@@ -1,0 +1,52 @@
+# Arquivos Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Ambiente virtual
+venv/
+env/
+.env
+
+# Logs e banco de dados
+logs/*.log
+*.log
+*.db
+youtube_downloader.db
+
+# Arquivos de mídia baixados
+downloads/
+
+# Arquivos do sistema
+.DS_Store
+Thumbs.db
+
+# IDEs e editores
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Arquivos de distribuição
+dist/
+build/
+*.egg-info/
+
+# Arquivos temporários
+*.tmp
+*.bak
+*.backup
+
+# Arquivos de configuração local
+config.local.json
+
+# Arquivos compactados
+*.7z
+*.zip
+*.rar
+
+# FFmpeg binaries (opcional, dependendo da sua estratégia de distribuição)
+# ffmpeg.exe
+# ffplay.exe
+# ffprobe.exe
