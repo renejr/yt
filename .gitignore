@@ -18,6 +18,9 @@ youtube_downloader.db
 # Arquivos de mídia baixados
 downloads/
 
+# Arquivos antigos
+olds/
+
 # Arquivos do sistema
 .DS_Store
 Thumbs.db
@@ -46,7 +49,11 @@ config.local.json
 *.zip
 *.rar
 
+# Arquivos executaveis
+*.exe
+
 # FFmpeg binaries (opcional, dependendo da sua estratégia de distribuição)
 # ffmpeg.exe
 # ffplay.exe
 # ffprobe.exe
+*.exe
