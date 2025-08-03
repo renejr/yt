@@ -1,8 +1,8 @@
-# YouTube Video Downloader v2.1 - Refatorado
+# YouTube Video Downloader v2.1.2 - Widget Avançado
 
 🎬 **Aplicativo desktop modular em Python para baixar vídeos do YouTube com interface gráfica moderna e arquitetura robusta.**
 
-> **Versão 2.1**: Completamente refatorado com arquitetura modular, mantendo 100% da funcionalidade original.
+> **Versão 2.1.2**: Widget de informações completamente reformulado com conteúdo completo, links clicáveis e sistema de cópia avançado.
 
 ## ✨ Funcionalidades
 
@@ -11,20 +11,36 @@
 - **Download de vídeos do YouTube** em múltiplas resoluções (360p até 4K)
 - **Download apenas de áudio** em formato MP3 com múltiplas qualidades (128-320 kbps)
 - **Mini-player de preview** com thumbnail, metadados e botão de preview no navegador
+- **Widget de informações avançado** com conteúdo completo, links clicáveis e sistema de cópia
 - **Extração automática** de informações completas do vídeo
 - **Sistema de histórico** completo com busca e filtros
 - **Configurações personalizáveis** (temas, resolução padrão, auto-abertura)
 - **Sistema de logs avançado** com rotação e compactação automática
 - **Suporte robusto** a fragmentos e downloads instáveis
 
+### 📺 Widget de Informações Avançado
+- **📄 Conteúdo completo** - Descrições até 50.000 caracteres sem truncamento
+- **🔗 Links clicáveis** - URLs detectadas automaticamente e abertas no navegador
+- **📋 Sistema de cópia** - Seleção livre, atalhos (Ctrl+C, Ctrl+A) e menu de contexto
+- **🎨 Formatação inteligente** - Duração, visualizações e datas formatadas
+- **⚡ Interface otimizada** - Scrollbar fluida, cursores intuitivos e feedback visual
+
 ### 🚀 Melhorias da Versão 2.1
 - **Arquitetura modular** - Código organizado em módulos especializados
 - **Mini-player de preview** - Visualização rica com thumbnail e metadados do vídeo
+- **Widget de informações avançado** - Conteúdo completo, links clicáveis e cópia de texto
 - **Tratamento robusto de erros** - 10 retries por fragmento problemático
 - **Persistência de configurações** - Lembra último diretório selecionado
 - **Avisos de sucesso** - Feedback visual após downloads
 - **Performance otimizada** - Downloads mais estáveis e rápidos
 - **Manutenibilidade** - Código limpo e bem documentado
+
+### ✨ Novidades da Versão 2.1.2
+- **📺 Widget de informações reformulado** - Exibição completa sem truncamento (50.000 caracteres)
+- **🔗 Links clicáveis automáticos** - URLs detectadas e abertas no navegador
+- **📋 Sistema de cópia avançado** - Seleção livre, Ctrl+C, Ctrl+A e menu de contexto
+- **🎨 Formatação inteligente** - Duração (HH:MM:SS), visualizações (1.234.567), data (DD/MM/AAAA)
+- **⚡ Interface otimizada** - Scrollbar melhorada, cursores intuitivos e feedback visual
 
 ## Requisitos
 
@@ -66,12 +82,17 @@ python yt.py
 2. **Clique em "Extrair Informações"** para ver detalhes do vídeo
 3. **Visualize o mini-player** com thumbnail, título, duração e canal do vídeo
 4. **Use o botão "🎬 Preview"** para abrir o vídeo no navegador (opcional)
-5. **Escolha o tipo de download:**
+5. **Explore as informações completas** do vídeo:
+   - **📄 Leia a descrição completa** sem truncamento
+   - **🔗 Clique em links** para abrir no navegador
+   - **📋 Selecione e copie** texto (Ctrl+C, Ctrl+A)
+   - **🖱️ Use o menu de contexto** (clique direito) para opções de cópia
+6. **Escolha o tipo de download:**
    - **Para vídeo:** Selecione a resolução desejada
    - **Para áudio:** Marque "Baixar apenas áudio" e escolha a qualidade (128-320 kbps)
-6. **Escolha o diretório** de destino (será lembrado para próximos downloads)
-7. **Clique em "Baixar"** e aguarde a conclusão
-8. **Receba confirmação** visual quando o download terminar
+7. **Escolha o diretório** de destino (será lembrado para próximos downloads)
+8. **Clique em "Baixar"** e aguarde a conclusão
+9. **Receba confirmação** visual quando o download terminar
 
 ## 📁 Estrutura do Projeto
 
@@ -118,7 +139,9 @@ python yt.py
         ├── RESTORED_FEATURES.md       # ✨ Funcionalidades restauradas
         ├── AUDIO_DOWNLOAD_FEATURE.md  # 🎵 Download de áudio
         ├── MINI_PLAYER_FEATURE.md     # 🎬 Mini-player de preview
-        └── MINI_PLAYER_FIXES.md       # 🔧 Correções do mini-player
+        ├── MINI_PLAYER_FIXES.md       # 🔧 Correções do mini-player
+        ├── CRITICAL_FIXES_ANALYSIS.md # 🚨 Análise de correções críticas
+        └── VIDEO_INFO_WIDGET_IMPROVEMENTS.md # 📺 Melhorias do widget de informações
 ```
 
 ### 🎯 Benefícios da Nova Arquitetura
@@ -168,13 +191,16 @@ Para debug avançado, consulte:
 
 ## 📊 Estatísticas de Performance
 
-| Métrica | Versão Original | Versão 2.1 Refatorada |
-|---------|-----------------|------------------------|
+| Métrica | Versão Original | Versão 2.1.2 Refatorada |
+|---------|-----------------|-------------------------|
 | **Linhas de Código** | 1.842 (monólito) | 7 módulos especializados |
 | **Manutenibilidade** | ⭐⭐ | ⭐⭐⭐⭐⭐ |
 | **Taxa de Sucesso** | ~85% | **~95%** |
 | **Tratamento de Erros** | Básico | **Robusto (10 retries)** |
 | **Funcionalidades** | 100% | **100% + melhorias** |
+| **Widget de Informações** | Limitado (500 chars) | **Completo (50.000 chars)** |
+| **Interatividade** | ❌ Básica | **✅ Avançada (links, cópia)** |
+| **Experiência do Usuário** | ⭐⭐⭐ | **⭐⭐⭐⭐⭐** |
 
 ## 🤝 Contribuição
 
@@ -201,11 +227,13 @@ Este projeto está licenciado sob a **Licença MIT** - veja o arquivo [LICENSE](
 
 ## 👨‍💻 Desenvolvimento
 
-### 🏗️ Versão 2.1 - Refatoração Completa
+### 🏗️ Versão 2.1.2 - Widget de Informações Avançado
 - **Arquitetura**: Transformação de monólito em módulos especializados
 - **Qualidade**: Código limpo, documentado e testado
 - **Performance**: Otimizações significativas de estabilidade
 - **Funcionalidades**: 100% mantidas + novas melhorias
+- **Widget Reformulado**: Conteúdo completo, links clicáveis e sistema de cópia
+- **Experiência do Usuário**: Interface moderna e intuitiva
 
 ### 📈 Roadmap Futuro
 - 🎵 **Download de playlists** completas

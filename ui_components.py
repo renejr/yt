@@ -49,6 +49,9 @@ class MainApplication:
         min_width, min_height = self.config_manager.get_min_window_size()
         self.root.minsize(min_width, min_height)
         
+        # Maximizar a janela ao iniciar
+        self.root.state('zoomed')  # Windows
+        
         # Configurar fechamento da aplicação
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
     
@@ -199,10 +202,40 @@ class DownloadTab:
         # Frame para metadados
         self.metadata_frame = tk.Frame(self.frame)
         self.metadata_label = tk.Label(self.metadata_frame, text="Informações do Vídeo:")
-        self.metadata_text = tk.Text(self.metadata_frame, wrap=tk.WORD, width=40, height=10)
+        
+        # Widget de texto com funcionalidades melhoradas
+        self.metadata_text = tk.Text(
+            self.metadata_frame, 
+            wrap=tk.WORD, 
+            width=40, 
+            height=12,  # Aumentar altura para mais conteúdo
+            state=tk.NORMAL,  # Permitir seleção e cópia
+            cursor="xterm",  # Cursor de texto para indicar selecionabilidade
+            selectbackground="#0078d4",  # Cor de seleção
+            selectforeground="white"
+        )
+        
+        # Scrollbar para navegação
         self.metadata_scrollbar = tk.Scrollbar(self.metadata_frame)
         self.metadata_text.config(yscrollcommand=self.metadata_scrollbar.set)
         self.metadata_scrollbar.config(command=self.metadata_text.yview)
+        
+        # Configurar tags para links clicáveis
+        self.metadata_text.tag_configure("link", foreground="#0066cc", underline=True)
+        self.metadata_text.tag_configure("link_hover", foreground="#004499", underline=True)
+        
+        # Bind eventos para links
+        self.metadata_text.tag_bind("link", "<Button-1>", self.on_link_click)
+        self.metadata_text.tag_bind("link", "<Enter>", self.on_link_enter)
+        self.metadata_text.tag_bind("link", "<Leave>", self.on_link_leave)
+        
+        # Menu de contexto para copiar
+        self.create_metadata_context_menu()
+        
+        # Atalhos de teclado
+        self.metadata_text.bind("<Control-c>", lambda e: self.copy_selected_text())
+        self.metadata_text.bind("<Control-a>", lambda e: self.select_all_text())
+        self.metadata_text.bind("<Control-A>", lambda e: self.select_all_text())  # Maiúsculo também
         
         # Botão download
         self.download_button = tk.Button(
@@ -251,18 +284,19 @@ class DownloadTab:
     def create_mini_player(self):
         """Cria o mini-player de preview do vídeo"""
         # Frame principal do mini-player (inicialmente oculto)
-        self.mini_player_frame = tk.Frame(self.frame, relief=tk.RAISED, bd=1)
+        self.mini_player_frame = tk.Frame(self.frame, relief=tk.RAISED, bd=1, height=120)
         
-        # Frame para thumbnail
-        self.thumbnail_frame = tk.Frame(self.mini_player_frame)
+        # Frame para thumbnail com tamanho fixo
+        self.thumbnail_frame = tk.Frame(self.mini_player_frame, width=160, height=100)
+        self.thumbnail_frame.pack_propagate(False)  # Impedir redimensionamento do frame da thumbnail
+        
         self.thumbnail_label = tk.Label(
             self.thumbnail_frame,
             text="📺",
-            font=("Arial", 24),
-            width=20,
-            height=5,
+            font=("Arial", 20),
             relief=tk.SUNKEN,
-            bd=1
+            bd=1,
+            bg="#f0f0f0"
         )
         
         # Frame para informações do vídeo
@@ -274,7 +308,9 @@ class DownloadTab:
             text="",
             font=("Arial", 10, "bold"),
             wraplength=300,
-            justify=tk.LEFT
+            justify=tk.LEFT,
+            anchor='nw',
+            height=2
         )
         
         # Informações adicionais (duração, canal, etc.)
@@ -282,7 +318,9 @@ class DownloadTab:
             self.info_frame,
             text="",
             font=("Arial", 9),
-            justify=tk.LEFT
+            justify=tk.LEFT,
+            anchor='nw',
+            height=2
         )
         
         # Botão para abrir vídeo no navegador
@@ -292,16 +330,18 @@ class DownloadTab:
             command=self.open_video_preview,
             font=("Arial", 9),
             bg="#4CAF50",
-            fg="white"
+            fg="white",
+            width=12,
+            height=1
         )
         
-        # Layout do mini-player
-        self.thumbnail_label.pack()
+        # Layout do mini-player com dimensões controladas
+        self.thumbnail_label.pack(fill=tk.BOTH, expand=True)
         self.thumbnail_frame.pack(side=tk.LEFT, padx=5, pady=5)
         
-        self.video_title_label.pack(anchor='w', pady=(5, 2))
-        self.video_info_label.pack(anchor='w', pady=(0, 2))
-        self.preview_button.pack(anchor='w', pady=(5, 5))
+        self.video_title_label.pack(anchor='nw', pady=(5, 2), fill=tk.X)
+        self.video_info_label.pack(anchor='nw', pady=(0, 2), fill=tk.X)
+        self.preview_button.pack(anchor='nw', pady=(5, 5))
         self.info_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
         
         # Variáveis para armazenar dados do vídeo
@@ -317,8 +357,31 @@ class DownloadTab:
                 AppUtils.show_error_message("Erro", f"Não foi possível abrir o vídeo: {str(e)}")
     
     def show_mini_player(self):
-        """Exibe o mini-player"""
-        self.mini_player_frame.grid(row=4, column=0, columnspan=2, sticky='ew', pady=5)
+        """Exibe o mini-player com dimensões fixas"""
+        # Configurar dimensões antes de posicionar
+        self.mini_player_frame.configure(height=120)
+        self.mini_player_frame.grid_propagate(False)
+        
+        # Garantir que o frame da thumbnail mantenha suas dimensões
+        self.thumbnail_frame.configure(width=160, height=100)
+        self.thumbnail_frame.pack_propagate(False)
+        
+        # Posicionar mini-player na row=4 (separado da barra de progresso)
+        self.mini_player_frame.grid(
+            row=4, 
+            column=0, 
+            columnspan=2, 
+            sticky='ew', 
+            pady=10,
+            ipady=10  # Padding interno maior para garantir altura
+        )
+        
+        # Forçar atualização da interface
+        self.mini_player_frame.update_idletasks()
+        self.thumbnail_frame.update_idletasks()
+        
+        # Log para debug
+        self.log_manager.log_info("Mini-player exibido com dimensões fixas (altura: 120px, thumbnail: 160x100px)")
     
     def hide_mini_player(self):
         """Oculta o mini-player"""
@@ -431,19 +494,140 @@ class DownloadTab:
         self.context_menu.add_command(label="Colar", command=self.paste_url)
         self.url_entry.bind("<Button-3>", self.show_context_menu)
     
+    def create_metadata_context_menu(self):
+        """Cria menu de contexto para o widget de metadados"""
+        self.metadata_context_menu = tk.Menu(self.frame, tearoff=0)
+        self.metadata_context_menu.add_command(label="📋 Copiar Seleção", command=self.copy_selected_text)
+        self.metadata_context_menu.add_command(label="📄 Copiar Tudo", command=self.copy_all_text)
+        self.metadata_context_menu.add_separator()
+        self.metadata_context_menu.add_command(label="🔍 Selecionar Tudo", command=self.select_all_text)
+        
+        # Bind do menu ao widget de metadados
+        self.metadata_text.bind("<Button-3>", self.show_metadata_context_menu)
+    
+    def show_metadata_context_menu(self, event):
+        """Mostra menu de contexto para metadados"""
+        try:
+            self.metadata_context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.metadata_context_menu.grab_release()
+    
+    def copy_selected_text(self):
+        """Copia texto selecionado dos metadados"""
+        try:
+            selected_text = self.metadata_text.selection_get()
+            if selected_text:
+                self.metadata_text.clipboard_clear()
+                self.metadata_text.clipboard_append(selected_text)
+                self.log_manager.log_info("Texto selecionado copiado para área de transferência")
+        except tk.TclError:
+            AppUtils.show_error_message("Erro", "Nenhum texto selecionado")
+    
+    def copy_all_text(self):
+        """Copia todo o texto dos metadados"""
+        try:
+            all_text = self.metadata_text.get("1.0", tk.END)
+            if all_text.strip():
+                self.metadata_text.clipboard_clear()
+                self.metadata_text.clipboard_append(all_text.strip())
+                self.log_manager.log_info("Todo o texto dos metadados copiado")
+        except Exception as e:
+            self.log_manager.log_error(e, "Erro ao copiar texto")
+    
+    def select_all_text(self):
+        """Seleciona todo o texto dos metadados"""
+        try:
+            self.metadata_text.tag_add(tk.SEL, "1.0", tk.END)
+            self.metadata_text.mark_set(tk.INSERT, "1.0")
+            self.metadata_text.see(tk.INSERT)
+        except Exception as e:
+            self.log_manager.log_error(e, "Erro ao selecionar texto")
+    
+    def on_link_click(self, event):
+        """Callback para clique em links"""
+        try:
+            # Obter posição do clique
+            index = self.metadata_text.index(f"@{event.x},{event.y}")
+            
+            # Verificar se há uma tag de link na posição
+            tags = self.metadata_text.tag_names(index)
+            if "link" in tags:
+                # Obter o texto do link
+                ranges = self.metadata_text.tag_ranges("link")
+                for i in range(0, len(ranges), 2):
+                    start, end = ranges[i], ranges[i+1]
+                    if self.metadata_text.compare(start, "<=", index) and self.metadata_text.compare(index, "<", end):
+                        link_text = self.metadata_text.get(start, end)
+                        if link_text.startswith("http"):
+                            webbrowser.open(link_text)
+                            self.log_manager.log_info(f"Link aberto: {link_text}")
+                        break
+        except Exception as e:
+            self.log_manager.log_error(e, "Erro ao processar clique em link")
+    
+    def on_link_enter(self, event):
+        """Callback para mouse sobre link"""
+        self.metadata_text.config(cursor="hand2")
+    
+    def on_link_leave(self, event):
+        """Callback para mouse sair do link"""
+        self.metadata_text.config(cursor="xterm")
+    
+    def _insert_text_with_links(self, text):
+        """Insere texto detectando e formatando links automaticamente"""
+        import re
+        
+        # Padrão para detectar URLs
+        url_pattern = r'https?://[^\s<>"{}|\\^`\[\]]+'
+        
+        # Encontrar todas as URLs no texto
+        urls = list(re.finditer(url_pattern, text))
+        
+        if not urls:
+            # Nenhum link encontrado, inserir texto normal
+            self.metadata_text.insert(tk.END, text)
+            return
+        
+        # Processar texto com links
+        last_end = 0
+        
+        for match in urls:
+            start, end = match.span()
+            url = match.group()
+            
+            # Inserir texto antes do link
+            if start > last_end:
+                self.metadata_text.insert(tk.END, text[last_end:start])
+            
+            # Inserir link com formatação
+            link_start = self.metadata_text.index(tk.INSERT)
+            self.metadata_text.insert(tk.END, url)
+            link_end = self.metadata_text.index(tk.INSERT)
+            self.metadata_text.tag_add("link", link_start, link_end)
+            
+            last_end = end
+        
+        # Inserir texto restante após o último link
+        if last_end < len(text):
+            self.metadata_text.insert(tk.END, text[last_end:])
+        
+        self.log_manager.log_info(f"Texto inserido com {len(urls)} links detectados")
+    
     def setup_layout(self):
         """Configura layout da aba"""
-        # Configurar grid (adicionando linha para mini-player)
-        for i in range(10):
+        # Configurar grid (reorganizado para evitar conflitos)
+        for i in range(12):  # Aumentado para acomodar todos os elementos
             if i == 2:  # Linha dos frames principais
                 self.frame.rowconfigure(i, weight=1, pad=UIConstants.PADDING)
+            elif i == 4:  # Linha do mini-player - altura mínima garantida
+                self.frame.rowconfigure(i, minsize=130, pad=UIConstants.PADDING)
             else:
                 self.frame.rowconfigure(i, pad=UIConstants.PADDING)
         
         for i in range(2):
             self.frame.columnconfigure(i, weight=1, pad=UIConstants.PADDING)
         
-        # Posicionar widgets
+        # Posicionar widgets com layout reorganizado
         self.url_label.grid(row=0, column=0, sticky='w')
         self.url_entry.grid(row=0, column=1, sticky='ew')
         
@@ -473,16 +657,13 @@ class DownloadTab:
         
         self.download_button.grid(row=3, column=0, columnspan=2, pady=UIConstants.BUTTON_PADDING)
         
-        # Mini-player (inicialmente oculto)
-        # Será posicionado dinamicamente quando um vídeo for carregado
+        # Mini-player (row=4) - será posicionado dinamicamente
+        # Progress frame (row=5) - será posicionado dinamicamente
         
-        # Progress frame (inicialmente oculto)
-        # Não posicionar aqui - será posicionado dinamicamente em show_progress_bar()
+        self.directory_button.grid(row=7, column=0, columnspan=2, pady=UIConstants.BUTTON_PADDING)
+        self.directory_label.grid(row=8, column=0, columnspan=2, sticky='ew', padx=UIConstants.PADDING)
         
-        self.directory_button.grid(row=6, column=0, columnspan=2, pady=UIConstants.BUTTON_PADDING)
-        self.directory_label.grid(row=7, column=0, columnspan=2, sticky='ew', padx=UIConstants.PADDING)
-        
-        self.exit_button.grid(row=8, column=0, columnspan=2, pady=UIConstants.PADDING)
+        self.exit_button.grid(row=9, column=0, columnspan=2, pady=UIConstants.PADDING)
     
     def show_context_menu(self, event):
         """Mostra menu de contexto"""
@@ -525,25 +706,65 @@ class DownloadTab:
     
     def on_extraction_complete(self, success, data, resolutions):
         """Callback para conclusão da extração"""
+        # Log do resultado da extração
+        self.log_manager.log_info(f"Extração concluída - Sucesso: {success}")
+        
+        # Reabilitar botão
         self.extract_button.config(state=tk.NORMAL, text="Extrair informações")
         
         if success:
+            self.log_manager.log_info(f"Dados extraídos: Título = {data.get('title', 'N/A')[:50]}...")
+            self.log_manager.log_info(f"Resoluções recebidas: {len(resolutions)} itens - {resolutions}")
+            
+            # Atualizar interface com dados extraídos
             self.update_resolutions(resolutions)
             self.update_metadata(data)
             self.enable_download_if_ready()
+            
+            # Ocultar mini-player anterior e mostrar novo se dados válidos
+            self.hide_mini_player()
+            if data and isinstance(data, dict):
+                self.update_mini_player(data)
+            
+            self.log_manager.log_info("Interface atualizada com sucesso após extração")
         else:
+            self.log_manager.log_error(f"Erro na extração: {data}", "Extração de Informações")
             AppUtils.show_error_message("Erro", data)
+            
+            # Limpar interface em caso de erro
+            self.hide_mini_player()
+            self.resolutions_listbox.delete(0, tk.END)
+            self.metadata_text.delete("1.0", tk.END)
     
     def update_resolutions(self, resolutions):
         """Atualiza lista de resoluções"""
+        # Log para debug
+        self.log_manager.log_info(f"Atualizando lista de resoluções: {resolutions}")
+        
+        # Limpar lista atual
         self.resolutions_listbox.delete(0, tk.END)
         self.current_resolutions = resolutions
         
-        for resolution in resolutions:
+        # Verificar se há resoluções válidas
+        if not resolutions:
+            self.log_manager.log_warning("Nenhuma resolução recebida para atualização")
+            self.resolutions_listbox.insert(tk.END, "Nenhuma resolução disponível")
+            return
+        
+        # Inserir resoluções na lista
+        for i, resolution in enumerate(resolutions):
             self.resolutions_listbox.insert(tk.END, resolution)
+            self.log_manager.log_info(f"Resolução {i+1}: {resolution}")
+        
+        # Selecionar primeira resolução automaticamente se disponível
+        if len(resolutions) > 0 and resolutions[0] != "Nenhuma resolução disponível":
+            self.resolutions_listbox.selection_set(0)
+            self.log_manager.log_info(f"Primeira resolução selecionada automaticamente: {resolutions[0]}")
+        
+        self.log_manager.log_info(f"Lista de resoluções atualizada com {len(resolutions)} itens")
     
     def update_metadata(self, video_info):
-        """Atualiza metadados do vídeo"""
+        """Atualiza metadados do vídeo com conteúdo completo e links clicáveis"""
         self.metadata_text.delete("1.0", tk.END)
         
         if isinstance(video_info, dict):
@@ -557,26 +778,62 @@ class DownloadTab:
             uploader = metadata.get('uploader', 'N/A')
             self.metadata_text.insert(tk.END, f"👤 Canal: {uploader}\n\n")
             
-            # Duração
+            # Duração formatada
             duration = metadata.get('duration', 'N/A')
-            self.metadata_text.insert(tk.END, f"⏱️ Duração: {duration}\n\n")
+            if duration != 'N/A' and isinstance(duration, (int, float)):
+                hours = int(duration // 3600)
+                minutes = int((duration % 3600) // 60)
+                seconds = int(duration % 60)
+                if hours > 0:
+                    duration_str = f"{hours:02d}:{minutes:02d}:{seconds:02d}"
+                else:
+                    duration_str = f"{minutes:02d}:{seconds:02d}"
+                self.metadata_text.insert(tk.END, f"⏱️ Duração: {duration_str}\n\n")
+            else:
+                self.metadata_text.insert(tk.END, f"⏱️ Duração: {duration}\n\n")
             
-            # Visualizações
+            # Visualizações formatadas
             view_count = metadata.get('view_count', 'N/A')
-            self.metadata_text.insert(tk.END, f"👁️ Visualizações: {view_count}\n\n")
+            if view_count != 'N/A' and isinstance(view_count, (int, float)):
+                view_count_str = f"{int(view_count):,}".replace(',', '.')
+                self.metadata_text.insert(tk.END, f"👁️ Visualizações: {view_count_str}\n\n")
+            else:
+                self.metadata_text.insert(tk.END, f"👁️ Visualizações: {view_count}\n\n")
             
-            # Data de upload
+            # Data de upload formatada
             upload_date = metadata.get('upload_date', 'N/A')
-            if upload_date != 'N/A':
+            if upload_date != 'N/A' and len(str(upload_date)) == 8:
+                try:
+                    date_str = str(upload_date)
+                    formatted_date = f"{date_str[6:8]}/{date_str[4:6]}/{date_str[0:4]}"
+                    self.metadata_text.insert(tk.END, f"📅 Data de Upload: {formatted_date}\n\n")
+                except:
+                    self.metadata_text.insert(tk.END, f"📅 Data de Upload: {upload_date}\n\n")
+            else:
                 self.metadata_text.insert(tk.END, f"📅 Data de Upload: {upload_date}\n\n")
             
-            # Descrição (truncada)
+            # URL do vídeo
+            webpage_url = metadata.get('webpage_url', 'N/A')
+            if webpage_url != 'N/A':
+                self.metadata_text.insert(tk.END, "🔗 URL: ")
+                start_pos = self.metadata_text.index(tk.INSERT)
+                self.metadata_text.insert(tk.END, webpage_url)
+                end_pos = self.metadata_text.index(tk.INSERT)
+                self.metadata_text.tag_add("link", start_pos, end_pos)
+                self.metadata_text.insert(tk.END, "\n\n")
+            
+            # Descrição COMPLETA (sem cortes)
             description = metadata.get('description', 'N/A')
-            if description != 'N/A' and description.strip():
-                self.metadata_text.insert(tk.END, f"📝 Descrição: {description}")
+            if description != 'N/A' and description and description.strip():
+                self.metadata_text.insert(tk.END, "📝 Descrição:\n")
+                
+                # Processar descrição para detectar links
+                self._insert_text_with_links(description)
+            else:
+                self.metadata_text.insert(tk.END, "📝 Descrição: Não disponível")
             
             # Log para debug
-            self.log_manager.log_info(f"Metadados atualizados para: {title[:50]}...")
+            self.log_manager.log_info(f"Metadados completos atualizados para: {title[:50]}...")
             
             # Atualizar mini-player com informações do vídeo
             self.update_mini_player(video_info)
@@ -684,8 +941,8 @@ class DownloadTab:
             self.progress_bar.pack(fill=tk.X, pady=2)
             self.progress_label.pack()
         
-        # Posicionar o frame no grid
-        self.progress_frame.grid(row=4, column=0, columnspan=2, sticky='ew', padx=UIConstants.PADDING, pady=UIConstants.BUTTON_PADDING)
+        # Posicionar o frame no grid (row=5 para evitar conflito com mini-player)
+        self.progress_frame.grid(row=5, column=0, columnspan=2, sticky='ew', padx=UIConstants.PADDING, pady=UIConstants.BUTTON_PADDING)
         self.progress_bar['value'] = 0
         self.progress_label.config(text="Preparando download...")
         
@@ -780,19 +1037,62 @@ class DownloadTab:
         """Adiciona download ao histórico"""
         try:
             metadata = self.download_manager.get_video_metadata()
-            selected_index = self.resolutions_listbox.curselection()
-            selected_resolution = self.resolutions_listbox.get(selected_index) if selected_index else 'N/A'
+            
+            # Determinar resolução baseada no tipo de download
+            if self.audio_only_var.get():
+                # Para downloads de áudio, usar 'music' ao invés de 'N/A'
+                resolution = 'music'
+            else:
+                # Para downloads de vídeo, obter resolução selecionada
+                selected_index = self.resolutions_listbox.curselection()
+                resolution = self.resolutions_listbox.get(selected_index) if selected_index else 'N/A'
+            
+            # Obter informações do vídeo atual
+            current_info = self.download_manager.current_info
+            
+            # Calcular tamanho estimado do arquivo
+            file_size = 'N/A'
+            if current_info:
+                if self.audio_only_var.get():
+                    # Para áudio, estimar baseado na duração (aproximadamente 1MB por minuto para 192kbps)
+                    duration = current_info.get('duration', 0)
+                    if duration and isinstance(duration, (int, float)):
+                        # Estimar tamanho do áudio em bytes (192kbps = 24KB/s)
+                        estimated_size = int(duration * 24 * 1024)  # bytes
+                        file_size = str(estimated_size)
+                else:
+                    # Para vídeo, tentar obter tamanho aproximado
+                    file_size = str(current_info.get('filesize_approx', 'N/A'))
+                    if file_size == 'None':
+                        file_size = 'N/A'
+            
+            # Obter caminho do diretório de download
+            download_path = self.download_manager.download_directory or ''
+            
+            # Obter URL da thumbnail
+            thumbnail_url = ''
+            if current_info:
+                thumbnail_url = current_info.get('thumbnail', '')
             
             download_data = {
                 'url': self.url_entry.get().strip(),
                 'title': metadata.get('title', 'N/A'),
                 'duration': metadata.get('duration', 'N/A'),
-                'resolution': selected_resolution,
-                'download_path': '',  # Seria necessário obter o caminho real do arquivo
+                'resolution': resolution,
+                'file_size': file_size,
+                'download_path': download_path,
+                'thumbnail_url': thumbnail_url,
                 'uploader': metadata.get('uploader', 'N/A'),
                 'view_count': metadata.get('view_count', 0),
                 'description': metadata.get('description', '')
             }
+            
+            # Log para debug
+            self.log_manager.log_info(
+                f"Adicionando ao histórico - Tipo: {'áudio' if self.audio_only_var.get() else 'vídeo'}, "
+                f"Resolução: {resolution}, File_size: {file_size}, Path: {download_path}, "
+                f"Thumbnail: {'Sim' if thumbnail_url else 'Não'}"
+            )
             
             self.history_manager.add_download_to_history(download_data)
             

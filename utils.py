@@ -71,7 +71,7 @@ class AppUtils:
             return str(view_count)
     
     @staticmethod
-    def truncate_text(text, max_length=500):
+    def truncate_text(text, max_length=50000):
         """Trunca texto se exceder o tamanho máximo"""
         if not text or text == 'N/A':
             return "Não disponível"
