@@ -81,22 +81,42 @@ class DownloadManager:
     
     def _extract_resolutions(self, info):
         """Extrai e ordena resoluções disponíveis do vídeo"""
-        resolutions = []
+        resolutions = set()  # Usar set para evitar duplicatas
+        valid_formats = []
         
         if 'formats' in info and info['formats']:
             for format_info in info['formats']:
                 resolution = format_info.get('resolution')
-                if resolution and resolution != 'audio only':
-                    if resolution not in resolutions:
-                        resolutions.append(resolution)
+                vcodec = format_info.get('vcodec', 'none')
+                height = format_info.get('height')
+                
+                # Log para debug
+                self.log_manager.log_info(
+                    f"Formato encontrado: {format_info.get('format_id')} - "
+                    f"Resolução: {resolution} - Vcodec: {vcodec} - Altura: {height}"
+                )
+                
+                # Filtrar apenas formatos de vídeo válidos
+                if (resolution and 
+                    resolution != 'audio only' and 
+                    vcodec != 'none' and 
+                    height is not None):
+                    
+                    resolutions.add(resolution)
+                    valid_formats.append(format_info)
         
-        # Ordenar resoluções
-        if resolutions:
-            resolutions = AppUtils.sort_resolutions(resolutions)
+        # Converter set para lista e ordenar
+        resolutions_list = list(resolutions)
+        
+        if resolutions_list:
+            resolutions_list = AppUtils.sort_resolutions(resolutions_list)
+            self.log_manager.log_info(f"Resoluções extraídas: {resolutions_list}")
         else:
-            resolutions = ['Melhor qualidade disponível']
+            resolutions_list = ['Melhor qualidade disponível']
+            self.log_manager.log_warning("Nenhuma resolução válida encontrada, usando fallback")
         
-        return resolutions
+        self.log_manager.log_info(f"Total de formatos válidos: {len(valid_formats)}")
+        return resolutions_list
     
     def find_format_id(self, selected_resolution):
         """
