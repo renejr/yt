@@ -189,6 +189,12 @@ class UIConstants:
     MERGE_PROGRESS_START = 92
     MERGE_PROGRESS_END = 98
     
+    # Configurações do mini-player
+    MINI_PLAYER_THUMBNAIL_WIDTH = 160
+    MINI_PLAYER_THUMBNAIL_HEIGHT = 90
+    MINI_PLAYER_MAX_TITLE_LENGTH = 60
+    MINI_PLAYER_FRAME_HEIGHT = 120
+    
 class AppConstants:
     """Constantes gerais da aplicação"""
     

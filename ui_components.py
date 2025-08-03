@@ -2,6 +2,10 @@ import tkinter as tk
 from tkinter import messagebox, filedialog, ttk
 import threading
 import os
+import webbrowser
+import requests
+from PIL import Image, ImageTk
+from io import BytesIO
 from utils import AppUtils, UIConstants, AppConstants
 
 class MainApplication:
@@ -240,6 +244,186 @@ class DownloadTab:
             fg="white", 
             font=("Arial", 10, "bold")
         )
+        
+        # Mini-player de preview
+        self.create_mini_player()
+    
+    def create_mini_player(self):
+        """Cria o mini-player de preview do vídeo"""
+        # Frame principal do mini-player (inicialmente oculto)
+        self.mini_player_frame = tk.Frame(self.frame, relief=tk.RAISED, bd=1)
+        
+        # Frame para thumbnail
+        self.thumbnail_frame = tk.Frame(self.mini_player_frame)
+        self.thumbnail_label = tk.Label(
+            self.thumbnail_frame,
+            text="📺",
+            font=("Arial", 24),
+            width=20,
+            height=5,
+            relief=tk.SUNKEN,
+            bd=1
+        )
+        
+        # Frame para informações do vídeo
+        self.info_frame = tk.Frame(self.mini_player_frame)
+        
+        # Título do vídeo
+        self.video_title_label = tk.Label(
+            self.info_frame,
+            text="",
+            font=("Arial", 10, "bold"),
+            wraplength=300,
+            justify=tk.LEFT
+        )
+        
+        # Informações adicionais (duração, canal, etc.)
+        self.video_info_label = tk.Label(
+            self.info_frame,
+            text="",
+            font=("Arial", 9),
+            justify=tk.LEFT
+        )
+        
+        # Botão para abrir vídeo no navegador
+        self.preview_button = tk.Button(
+            self.info_frame,
+            text="🎬 Preview",
+            command=self.open_video_preview,
+            font=("Arial", 9),
+            bg="#4CAF50",
+            fg="white"
+        )
+        
+        # Layout do mini-player
+        self.thumbnail_label.pack()
+        self.thumbnail_frame.pack(side=tk.LEFT, padx=5, pady=5)
+        
+        self.video_title_label.pack(anchor='w', pady=(5, 2))
+        self.video_info_label.pack(anchor='w', pady=(0, 2))
+        self.preview_button.pack(anchor='w', pady=(5, 5))
+        self.info_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        # Variáveis para armazenar dados do vídeo
+        self.current_video_url = ""
+        self.current_thumbnail_url = ""
+        
+    def open_video_preview(self):
+        """Abre o vídeo no navegador para preview"""
+        if self.current_video_url:
+            try:
+                webbrowser.open(self.current_video_url)
+            except Exception as e:
+                AppUtils.show_error_message("Erro", f"Não foi possível abrir o vídeo: {str(e)}")
+    
+    def show_mini_player(self):
+        """Exibe o mini-player"""
+        self.mini_player_frame.grid(row=4, column=0, columnspan=2, sticky='ew', pady=5)
+    
+    def hide_mini_player(self):
+        """Oculta o mini-player"""
+        self.mini_player_frame.grid_remove()
+    
+    def update_mini_player(self, video_info):
+        """Atualiza as informações do mini-player"""
+        try:
+            self.log_manager.log_info("Iniciando atualização do mini-player")
+            
+            # Verificar se video_info é válido
+            if not video_info or not isinstance(video_info, dict):
+                self.log_manager.log_error("video_info inválido para mini-player", "Mini-Player")
+                self.hide_mini_player()
+                return
+            
+            # Atualizar título
+            title = video_info.get('title', 'Título não disponível')
+            if len(title) > UIConstants.MINI_PLAYER_MAX_TITLE_LENGTH:
+                title = title[:UIConstants.MINI_PLAYER_MAX_TITLE_LENGTH] + "..."
+            self.video_title_label.config(text=title)
+            self.log_manager.log_info(f"Título do mini-player atualizado: {title[:30]}...")
+            
+            # Atualizar informações
+            duration = AppUtils.format_duration(video_info.get('duration', 0))
+            uploader = video_info.get('uploader', 'Canal desconhecido')
+            view_count = AppUtils.format_view_count(video_info.get('view_count', 0))
+            
+            info_text = f"📺 {uploader}\n⏱️ {duration} | 👁️ {view_count}"
+            self.video_info_label.config(text=info_text)
+            
+            # Armazenar URL do vídeo
+            self.current_video_url = video_info.get('webpage_url', '')
+            
+            # Tentar carregar thumbnail
+            thumbnail_url = video_info.get('thumbnail')
+            if thumbnail_url:
+                self.log_manager.log_info(f"Carregando thumbnail: {thumbnail_url[:50]}...")
+                self.load_thumbnail(thumbnail_url)
+            else:
+                self.log_manager.log_info("Nenhuma thumbnail disponível")
+            
+            # Exibir mini-player
+            self.show_mini_player()
+            self.log_manager.log_info("Mini-player atualizado e exibido com sucesso")
+            
+        except Exception as e:
+            self.log_manager.log_error(e, "Erro ao atualizar mini-player")
+            print(f"Erro ao atualizar mini-player: {e}")
+            self.hide_mini_player()
+    
+    def load_thumbnail(self, thumbnail_url):
+        """Carrega e exibe a thumbnail do vídeo"""
+        if not thumbnail_url:
+            self.log_manager.log_info("URL da thumbnail não fornecida")
+            return
+            
+        def download_and_display():
+            try:
+                self.log_manager.log_info(f"Iniciando download da thumbnail: {thumbnail_url[:100]}...")
+                
+                # Download da thumbnail
+                response = requests.get(thumbnail_url, timeout=15, headers={
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                })
+                response.raise_for_status()
+                
+                self.log_manager.log_info(f"Thumbnail baixada com sucesso. Tamanho: {len(response.content)} bytes")
+                
+                # Processar imagem
+                image = Image.open(BytesIO(response.content))
+                original_size = image.size
+                
+                image = image.resize(
+                    (UIConstants.MINI_PLAYER_THUMBNAIL_WIDTH, UIConstants.MINI_PLAYER_THUMBNAIL_HEIGHT),
+                    Image.Resampling.LANCZOS
+                )
+                
+                self.log_manager.log_info(f"Imagem redimensionada de {original_size} para {image.size}")
+                
+                # Converter para PhotoImage
+                photo = ImageTk.PhotoImage(image)
+                
+                # Atualizar label na thread principal usando after
+                def update_ui():
+                    try:
+                        self.thumbnail_label.config(image=photo, text="")
+                        self.thumbnail_label.image = photo  # Manter referência
+                        self.log_manager.log_info("Thumbnail exibida com sucesso no mini-player")
+                    except Exception as ui_error:
+                        self.log_manager.log_error(ui_error, "Erro ao atualizar UI da thumbnail")
+                
+                # Usar after para thread safety
+                self.thumbnail_label.after(0, update_ui)
+                
+            except requests.exceptions.Timeout:
+                self.log_manager.log_error("Timeout ao baixar thumbnail", "Mini-Player")
+            except requests.exceptions.RequestException as req_error:
+                self.log_manager.log_error(req_error, "Erro de rede ao baixar thumbnail")
+            except Exception as e:
+                self.log_manager.log_error(e, "Erro geral ao carregar thumbnail")
+                print(f"Erro ao carregar thumbnail: {e}")
+        
+        # Executar download em thread separada
+        threading.Thread(target=download_and_display, daemon=True).start()
     
     def create_context_menu(self):
         """Cria menu de contexto para o campo URL"""
@@ -249,8 +433,8 @@ class DownloadTab:
     
     def setup_layout(self):
         """Configura layout da aba"""
-        # Configurar grid
-        for i in range(8):
+        # Configurar grid (adicionando linha para mini-player)
+        for i in range(10):
             if i == 2:  # Linha dos frames principais
                 self.frame.rowconfigure(i, weight=1, pad=UIConstants.PADDING)
             else:
@@ -289,14 +473,16 @@ class DownloadTab:
         
         self.download_button.grid(row=3, column=0, columnspan=2, pady=UIConstants.BUTTON_PADDING)
         
+        # Mini-player (inicialmente oculto)
+        # Será posicionado dinamicamente quando um vídeo for carregado
+        
         # Progress frame (inicialmente oculto)
-        self.progress_bar.pack(fill=tk.X, pady=2)
-        self.progress_label.pack()
+        # Não posicionar aqui - será posicionado dinamicamente em show_progress_bar()
         
-        self.directory_button.grid(row=5, column=0, columnspan=2, pady=UIConstants.BUTTON_PADDING)
-        self.directory_label.grid(row=6, column=0, columnspan=2, sticky='ew', padx=UIConstants.PADDING)
+        self.directory_button.grid(row=6, column=0, columnspan=2, pady=UIConstants.BUTTON_PADDING)
+        self.directory_label.grid(row=7, column=0, columnspan=2, sticky='ew', padx=UIConstants.PADDING)
         
-        self.exit_button.grid(row=7, column=0, columnspan=2, pady=UIConstants.PADDING)
+        self.exit_button.grid(row=8, column=0, columnspan=2, pady=UIConstants.PADDING)
     
     def show_context_menu(self, event):
         """Mostra menu de contexto"""
@@ -363,16 +549,42 @@ class DownloadTab:
         if isinstance(video_info, dict):
             metadata = self.download_manager.get_video_metadata()
             
-            self.metadata_text.insert(tk.END, f"Título: {metadata.get('title', 'N/A')}\n\n")
+            # Título
+            title = metadata.get('title', 'N/A')
+            self.metadata_text.insert(tk.END, f"📺 Título: {title}\n\n")
             
+            # Canal/Uploader
+            uploader = metadata.get('uploader', 'N/A')
+            self.metadata_text.insert(tk.END, f"👤 Canal: {uploader}\n\n")
+            
+            # Duração
+            duration = metadata.get('duration', 'N/A')
+            self.metadata_text.insert(tk.END, f"⏱️ Duração: {duration}\n\n")
+            
+            # Visualizações
+            view_count = metadata.get('view_count', 'N/A')
+            self.metadata_text.insert(tk.END, f"👁️ Visualizações: {view_count}\n\n")
+            
+            # Data de upload
+            upload_date = metadata.get('upload_date', 'N/A')
+            if upload_date != 'N/A':
+                self.metadata_text.insert(tk.END, f"📅 Data de Upload: {upload_date}\n\n")
+            
+            # Descrição (truncada)
             description = metadata.get('description', 'N/A')
-            if description != 'N/A':
-                self.metadata_text.insert(tk.END, f"Descrição: {description}\n\n")
+            if description != 'N/A' and description.strip():
+                self.metadata_text.insert(tk.END, f"📝 Descrição: {description}")
             
-            self.metadata_text.insert(tk.END, f"Visualizações: {metadata.get('view_count', 'N/A')}\n")
-            self.metadata_text.insert(tk.END, f"Duração: {metadata.get('duration', 'N/A')}")
+            # Log para debug
+            self.log_manager.log_info(f"Metadados atualizados para: {title[:50]}...")
+            
+            # Atualizar mini-player com informações do vídeo
+            self.update_mini_player(video_info)
         else:
-            self.metadata_text.insert(tk.END, "Erro: Informações do vídeo não disponíveis")
+            self.metadata_text.insert(tk.END, "❌ Erro: Informações do vídeo não disponíveis")
+            self.log_manager.log_error("video_info inválido em update_metadata", "UI")
+            # Ocultar mini-player em caso de erro
+            self.hide_mini_player()
     
     def on_resolution_select(self, event):
         """Callback para seleção de resolução"""
@@ -467,13 +679,26 @@ class DownloadTab:
     
     def show_progress_bar(self):
         """Mostra barra de progresso"""
+        # Configurar layout interno do progress_frame APENAS se não estiver configurado
+        if not self.progress_bar.winfo_manager():
+            self.progress_bar.pack(fill=tk.X, pady=2)
+            self.progress_label.pack()
+        
+        # Posicionar o frame no grid
         self.progress_frame.grid(row=4, column=0, columnspan=2, sticky='ew', padx=UIConstants.PADDING, pady=UIConstants.BUTTON_PADDING)
         self.progress_bar['value'] = 0
         self.progress_label.config(text="Preparando download...")
+        
+        # Forçar atualização da interface
+        self.progress_frame.update_idletasks()
+        self.frame.update_idletasks()
     
     def hide_progress_bar(self):
         """Esconde barra de progresso"""
         self.progress_frame.grid_remove()
+        # Limpar layout interno para evitar problemas na próxima exibição
+        self.progress_bar.pack_forget()
+        self.progress_label.pack_forget()
     
     def update_progress(self, d):
         """Atualiza progresso do download"""
@@ -580,6 +805,9 @@ class DownloadTab:
         button_text = "Baixar áudio" if self.audio_only_var.get() else "Baixar vídeo"
         self.download_button.config(state=tk.DISABLED, text=button_text)
         self.hide_progress_bar()
+        
+        # Ocultar mini-player
+        self.hide_mini_player()
         
         # Resetar opções de áudio se necessário
         if self.audio_only_var.get():

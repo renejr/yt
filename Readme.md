@@ -10,6 +10,7 @@
 - **Interface gráfica intuitiva** usando Tkinter com design moderno
 - **Download de vídeos do YouTube** em múltiplas resoluções (360p até 4K)
 - **Download apenas de áudio** em formato MP3 com múltiplas qualidades (128-320 kbps)
+- **Mini-player de preview** com thumbnail, metadados e botão de preview no navegador
 - **Extração automática** de informações completas do vídeo
 - **Sistema de histórico** completo com busca e filtros
 - **Configurações personalizáveis** (temas, resolução padrão, auto-abertura)
@@ -18,6 +19,7 @@
 
 ### 🚀 Melhorias da Versão 2.1
 - **Arquitetura modular** - Código organizado em módulos especializados
+- **Mini-player de preview** - Visualização rica com thumbnail e metadados do vídeo
 - **Tratamento robusto de erros** - 10 retries por fragmento problemático
 - **Persistência de configurações** - Lembra último diretório selecionado
 - **Avisos de sucesso** - Feedback visual após downloads
@@ -62,12 +64,14 @@ python yt.py
 ### 📋 Como Usar
 1. **Cole a URL** do vídeo do YouTube
 2. **Clique em "Extrair Informações"** para ver detalhes do vídeo
-3. **Escolha o tipo de download:**
+3. **Visualize o mini-player** com thumbnail, título, duração e canal do vídeo
+4. **Use o botão "🎬 Preview"** para abrir o vídeo no navegador (opcional)
+5. **Escolha o tipo de download:**
    - **Para vídeo:** Selecione a resolução desejada
    - **Para áudio:** Marque "Baixar apenas áudio" e escolha a qualidade (128-320 kbps)
-4. **Escolha o diretório** de destino (será lembrado para próximos downloads)
-5. **Clique em "Baixar"** e aguarde a conclusão
-6. **Receba confirmação** visual quando o download terminar
+6. **Escolha o diretório** de destino (será lembrado para próximos downloads)
+7. **Clique em "Baixar"** e aguarde a conclusão
+8. **Receba confirmação** visual quando o download terminar
 
 ## 📁 Estrutura do Projeto
 
@@ -112,7 +116,9 @@ python yt.py
         ├── BUG_FIXES.md              # 🐛 Correções implementadas
         ├── WINDOW_FIX.md             # 🪟 Correção janela extra
         ├── RESTORED_FEATURES.md       # ✨ Funcionalidades restauradas
-        └── AUDIO_DOWNLOAD_FEATURE.md  # 🎵 Download de áudio
+        ├── AUDIO_DOWNLOAD_FEATURE.md  # 🎵 Download de áudio
+        ├── MINI_PLAYER_FEATURE.md     # 🎬 Mini-player de preview
+        └── MINI_PLAYER_FIXES.md       # 🔧 Correções do mini-player
 ```
 
 ### 🎯 Benefícios da Nova Arquitetura
