@@ -219,8 +219,10 @@ class DownloadManager:
             # Configurações para download apenas de áudio
             options = {
                 'format': 'bestaudio/best',
-                'outtmpl': f"{self.download_directory}/%(title)s.%(ext)s",
+                'outtmpl': f"{self.download_directory}/%(title).200s.%(ext)s",
                 'restrictfilenames': True,
+                'windowsfilenames': True,
+                'ignoreerrors': False,
                 'ffmpeg_location': ffmpeg_path,
                 'progress_hooks': [self._progress_hook] if self.progress_callback else [],
                 'postprocessor_hooks': [self._postprocessor_hook] if self.postprocessor_callback else [],
@@ -242,11 +244,15 @@ class DownloadManager:
                 }]
             }
         else:
-            # Configurações para download de vídeo
+            # Configurações para download de vídeo com fallback robusto
+            # Usar estratégia de fallback para evitar erros de formato
+            format_selector = f"{format_id}+bestaudio/best[height<={self._extract_height_from_resolution(format_id)}]/best"
             options = {
-                'format': f"{format_id}+bestaudio",
-                'outtmpl': f"{self.download_directory}/%(title)s.%(ext)s",
+                'format': format_selector,
+                'outtmpl': f"{self.download_directory}/%(title).200s.%(ext)s",
                 'restrictfilenames': True,
+                'windowsfilenames': True,
+                'ignoreerrors': False,
                 'merge_output_format': AppConstants.SUPPORTED_OUTPUT_FORMAT,
                 'ffmpeg_location': ffmpeg_path,
                 'progress_hooks': [self._progress_hook] if self.progress_callback else [],
@@ -265,6 +271,17 @@ class DownloadManager:
             }
         
         return options
+    
+    def _extract_height_from_resolution(self, format_id):
+        """Extrai altura da resolução para fallback"""
+        if not self.current_info or 'formats' not in self.current_info:
+            return 1080  # fallback padrão
+        
+        for fmt_obj in self.current_info['formats']:
+            if fmt_obj.get('format_id') == format_id:
+                return fmt_obj.get('height', 1080)
+        
+        return 1080  # fallback padrão
     
     def _progress_hook(self, d):
         """Hook para progresso do download"""
