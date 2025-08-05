@@ -320,6 +320,250 @@ class DatabaseManager:
         finally:
             conn.close()
     
+    def get_downloads_by_period(self, period_days=30):
+        """Obtém downloads de um período específico"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            query = """
+                SELECT * FROM downloads 
+                WHERE download_date >= datetime('now', '-{} days')
+                ORDER BY download_date DESC
+            """.format(period_days)
+            
+            cursor.execute(query)
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+        except Exception as e:
+            logging.error(f"Erro ao obter downloads por período: {e}")
+            return []
+        finally:
+            conn.close()
+    
+    def get_downloads_statistics_summary(self):
+        """Obtém resumo estatístico dos downloads"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            query = """
+                SELECT 
+                    COUNT(*) as total,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
+                    COUNT(CASE WHEN status = 'error' THEN 1 END) as failed,
+                    COUNT(CASE WHEN status = 'downloading' THEN 1 END) as in_progress,
+                    SUM(CASE WHEN file_size IS NOT NULL THEN file_size ELSE 0 END) as total_size,
+                    COUNT(DISTINCT uploader) as unique_channels
+                FROM downloads
+            """
+            
+            cursor.execute(query)
+            result = cursor.fetchone()
+            
+            if result:
+                return {
+                    'total': result[0],
+                    'completed': result[1],
+                    'failed': result[2],
+                    'in_progress': result[3],
+                    'total_size': result[4],
+                    'unique_channels': result[5]
+                }
+            
+            return {}
+            
+        except Exception as e:
+            logging.error(f"Erro ao obter resumo estatístico: {e}")
+            return {}
+        finally:
+            conn.close()
+    
+    def get_resolution_statistics(self):
+        """Obtém estatísticas por resolução"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            query = """
+                SELECT 
+                    resolution,
+                    COUNT(*) as count,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed,
+                    SUM(CASE WHEN file_size IS NOT NULL THEN file_size ELSE 0 END) as total_size,
+                    AVG(CASE WHEN file_size IS NOT NULL THEN file_size ELSE 0 END) as avg_size
+                FROM downloads
+                WHERE resolution IS NOT NULL
+                GROUP BY resolution
+                ORDER BY count DESC
+            """
+            
+            cursor.execute(query)
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+        except Exception as e:
+            logging.error(f"Erro ao obter estatísticas por resolução: {e}")
+            return []
+        finally:
+            conn.close()
+    
+    def get_channel_statistics(self, limit=20):
+        """Obtém estatísticas por canal"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            query = """
+                SELECT 
+                    uploader as channel,
+                    COUNT(*) as download_count,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count,
+                    SUM(CASE WHEN file_size IS NOT NULL THEN file_size ELSE 0 END) as total_size,
+                    MAX(download_date) as last_download
+                FROM downloads
+                WHERE uploader IS NOT NULL AND uploader != ''
+                GROUP BY uploader
+                ORDER BY download_count DESC
+                LIMIT ?
+            """
+            
+            cursor.execute(query, (limit,))
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+        except Exception as e:
+            logging.error(f"Erro ao obter estatísticas por canal: {e}")
+            return []
+        finally:
+            conn.close()
+    
+    def get_daily_download_counts(self, days=30):
+        """Obtém contagem diária de downloads"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            query = """
+                SELECT 
+                    DATE(download_date) as date,
+                    COUNT(*) as total_downloads,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_downloads,
+                    SUM(CASE WHEN file_size IS NOT NULL THEN file_size ELSE 0 END) as total_size
+                FROM downloads
+                WHERE download_date >= datetime('now', '-{} days')
+                GROUP BY DATE(download_date)
+                ORDER BY date DESC
+            """.format(days)
+            
+            cursor.execute(query)
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+        except Exception as e:
+            logging.error(f"Erro ao obter contagens diárias: {e}")
+            return []
+        finally:
+            conn.close()
+    
+    def get_hourly_download_pattern(self):
+        """Obtém padrão de downloads por hora do dia"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            query = """
+                SELECT 
+                    CAST(strftime('%H', download_date) AS INTEGER) as hour,
+                    COUNT(*) as download_count,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_count
+                FROM downloads
+                WHERE download_date >= datetime('now', '-30 days')
+                GROUP BY hour
+                ORDER BY hour
+            """
+            
+            cursor.execute(query)
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+        except Exception as e:
+            logging.error(f"Erro ao obter padrão por hora: {e}")
+            return []
+        finally:
+            conn.close()
+    
+    def get_file_size_distribution(self):
+        """Obtém distribuição de tamanhos de arquivo"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            query = """
+                SELECT 
+                    CASE 
+                        WHEN file_size < 10485760 THEN 'Pequeno (< 10MB)'
+                        WHEN file_size < 104857600 THEN 'Médio (10-100MB)'
+                        WHEN file_size < 1073741824 THEN 'Grande (100MB-1GB)'
+                        ELSE 'Muito Grande (> 1GB)'
+                    END as size_category,
+                    COUNT(*) as count,
+                    SUM(file_size) as total_size
+                FROM downloads
+                WHERE file_size IS NOT NULL AND status = 'completed'
+                GROUP BY size_category
+                ORDER BY 
+                    CASE size_category
+                        WHEN 'Pequeno (< 10MB)' THEN 1
+                        WHEN 'Médio (10-100MB)' THEN 2
+                        WHEN 'Grande (100MB-1GB)' THEN 3
+                        WHEN 'Muito Grande (> 1GB)' THEN 4
+                    END
+            """
+            
+            cursor.execute(query)
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+        except Exception as e:
+            logging.error(f"Erro ao obter distribuição de tamanhos: {e}")
+            return []
+        finally:
+            conn.close()
+    
+    def get_download_success_rate_by_resolution(self):
+        """Obtém taxa de sucesso por resolução"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            query = """
+                SELECT 
+                    resolution,
+                    COUNT(*) as total_attempts,
+                    COUNT(CASE WHEN status = 'completed' THEN 1 END) as successful,
+                    ROUND(
+                        (COUNT(CASE WHEN status = 'completed' THEN 1 END) * 100.0) / COUNT(*), 
+                        2
+                    ) as success_rate
+                FROM downloads
+                WHERE resolution IS NOT NULL
+                GROUP BY resolution
+                HAVING COUNT(*) >= 5
+                ORDER BY success_rate DESC
+            """
+            
+            cursor.execute(query)
+            columns = [description[0] for description in cursor.description]
+            return [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+        except Exception as e:
+            logging.error(f"Erro ao obter taxa de sucesso por resolução: {e}")
+            return []
+        finally:
+            conn.close()
+    
     def get_setting(self, key, default=None):
         """Obtém uma configuração"""
         conn = sqlite3.connect(self.db_path)
@@ -349,5 +593,33 @@ class DatabaseManager:
             logging.info(f"Configuração salva: {key} = {value}")
         except Exception as e:
             logging.error(f"Erro ao salvar configuração {key}: {e}")
+        finally:
+            conn.close()
+    
+    def execute_query(self, query, params=None):
+        """Executa uma consulta SQL customizada e retorna os resultados"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            if params:
+                cursor.execute(query, params)
+            else:
+                cursor.execute(query)
+            
+            # Se é uma consulta SELECT, retorna os resultados
+            if query.strip().upper().startswith('SELECT'):
+                columns = [description[0] for description in cursor.description]
+                rows = cursor.fetchall()
+                return [dict(zip(columns, row)) for row in rows]
+            else:
+                # Para INSERT, UPDATE, DELETE
+                conn.commit()
+                return cursor.rowcount
+                
+        except Exception as e:
+            logging.error(f"Erro ao executar consulta: {e}")
+            conn.rollback()
+            raise
         finally:
             conn.close()

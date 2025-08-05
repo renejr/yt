@@ -1,8 +1,8 @@
-# YouTube Video Downloader v2.1.4 - Exportação de Dados
+# YouTube Video Downloader v2.1.5 - Analytics Corrigidos
 
 🎬 **Aplicativo desktop modular em Python para baixar vídeos do YouTube com interface gráfica moderna e arquitetura robusta.**
 
-> **Versão 2.1.4**: Funcionalidade de exportação de dados implementada - exporte seu histórico em CSV e PDF com filtros avançados.
+> **Versão 2.1.5**: Correções críticas nas funções de análise - todas as estatísticas e relatórios agora funcionam perfeitamente.
 
 ## ✨ Funcionalidades
 
@@ -52,6 +52,15 @@
 - **Avisos de sucesso** - Feedback visual após downloads
 - **Performance otimizada** - Downloads mais estáveis e rápidos
 - **Manutenibilidade** - Código limpo e bem documentado
+
+### ✨ Novidades da Versão 2.1.5
+- **🐛 Correções críticas nas funções de análise** - Todas as estatísticas agora funcionam corretamente
+- **📊 Analytics totalmente funcionais** - Distribuição horária, por resolução e análise de armazenamento
+- **📈 Relatórios precisos** - Dados reais exibidos em todas as interfaces de estatísticas
+- **🔧 Melhorias técnicas** - Acesso correto aos resultados de consultas SQL
+- **✅ Testes implementados** - Scripts de teste para validação das funcionalidades
+- **📋 Status corrigido** - Consultas ajustadas para status 'completed'
+- **💯 100% funcional** - Todas as 6 funções de análise operacionais
 
 ### ✨ Novidades da Versão 2.1.4
 - **📊 Exportação de dados implementada** - Exporte histórico em CSV e PDF

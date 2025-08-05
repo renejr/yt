@@ -2,6 +2,31 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [2.1.5] - 2024-12-19
+
+### 🐛 Correções Críticas
+- **Correção das Funções de Análise**: Todas as funções do `AnalyticsManager` agora retornam dados válidos
+  - `get_hourly_distribution()` - Distribuição de downloads por hora
+  - `get_resolution_distribution()` - Distribuição por resolução de vídeo
+  - `get_storage_analysis()` - Análise detalhada de armazenamento
+  - `get_download_statistics()` - Estatísticas gerais de downloads
+  - `get_daily_download_trend()` - Tendência diária de downloads
+  - `get_top_channels()` - Canais mais baixados
+
+### 🔧 Melhorias Técnicas
+- Correção do acesso aos resultados de consultas SQL (índices → chaves de dicionário)
+- Ajuste do status de downloads para 'completed' nas consultas
+- Adição de tratamento para valores nulos nas análises
+- Criação de scripts de teste (`test_analytics.py`, `test_db.py`)
+
+### 📊 Impacto
+- 100% das funções de análise agora funcionais
+- Relatórios de analytics totalmente operacionais
+- Interface de estatísticas exibindo dados reais
+- Melhor experiência do usuário com dados precisos
+
+---
+
 ## [2.1.4] - 2024-12-19
 
 ### ✨ Novas Funcionalidades

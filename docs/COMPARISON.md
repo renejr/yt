@@ -6,6 +6,10 @@
 
 O projeto YouTube Video Downloader foi completamente refatorado, transformando um monólito de 1.842 linhas em uma arquitetura modular com 6 módulos especializados, mantendo 100% da funcionalidade original.
 
+🔧 **Versão 2.1.5 - Correções Críticas**
+
+Implementadas correções essenciais nas funções de análise do `AnalyticsManager`, garantindo que todas as estatísticas e relatórios funcionem corretamente com dados reais.
+
 ## Métricas de Código
 
 ### Antes da Refatoração
