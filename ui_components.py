@@ -13,7 +13,12 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from reportlab.lib.units import inch
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
+import numpy as np
 from utils import AppUtils, UIConstants, AppConstants
+from analytics_manager import AnalyticsManager, RecommendationEngine
 
 class MainApplication:
     """Aplicação principal com interface gráfica"""
@@ -71,6 +76,7 @@ class MainApplication:
         # Criar abas
         self.create_download_tab()
         self.create_history_tab()
+        self.create_analytics_tab()
         self.create_config_tab()
     
     def create_download_tab(self):
@@ -93,6 +99,15 @@ class MainApplication:
             self.log_manager
         )
         self.notebook.add(self.history_frame.frame, text="📋 Histórico")
+    
+    def create_analytics_tab(self):
+        """Cria a aba de análise e estatísticas"""
+        self.analytics_frame = AnalyticsTab(
+            self.notebook,
+            self.history_manager,
+            self.log_manager
+        )
+        self.notebook.add(self.analytics_frame.frame, text="📊 Analytics")
     
     def create_config_tab(self):
         """Cria a aba de configurações"""
@@ -2128,3 +2143,834 @@ class ConfigTab:
                 AppUtils.show_info_message("Sucesso", "Configurações restauradas para os valores padrão")
             else:
                 AppUtils.show_error_message("Erro", "Não foi possível restaurar as configurações")
+
+class AnalyticsTab:
+    """Aba de análise e estatísticas de downloads"""
+    
+    def __init__(self, parent, history_manager, log_manager):
+        """
+        Inicializa a aba de análise
+        
+        Args:
+            parent: Widget pai
+            history_manager: Instância do HistoryManager
+            log_manager: Instância do LogManager
+        """
+        self.parent = parent
+        self.history_manager = history_manager
+        self.log_manager = log_manager
+        
+        # Inicializar gerenciadores de análise
+        self.analytics_manager = AnalyticsManager(
+            self.history_manager.db_manager,
+            self.log_manager
+        )
+        self.recommendation_engine = RecommendationEngine(
+            self.analytics_manager,
+            self.history_manager.db_manager,
+            self.log_manager
+        )
+        
+        # Configurar matplotlib para tema escuro
+        plt.style.use('dark_background')
+        
+        self.create_widgets()
+        self.setup_layout()
+        self.load_analytics_data()
+    
+    def create_widgets(self):
+        """Cria os widgets da aba de análise"""
+        # Frame principal
+        self.frame = ttk.Frame(self.parent)
+        
+        # Criar notebook para sub-abas
+        self.analytics_notebook = ttk.Notebook(self.frame)
+        
+        # Criar sub-abas
+        self.create_dashboard_tab()
+        self.create_charts_tab()
+        self.create_reports_tab()
+        self.create_recommendations_tab()
+        
+        # Botão de atualização
+        self.refresh_button = ttk.Button(
+            self.frame,
+            text="🔄 Atualizar Dados",
+            command=self.refresh_analytics
+        )
+    
+    def create_dashboard_tab(self):
+        """Cria a aba do dashboard principal"""
+        self.dashboard_frame = ttk.Frame(self.analytics_notebook)
+        self.analytics_notebook.add(self.dashboard_frame, text="📊 Dashboard")
+        
+        # Frame para estatísticas gerais
+        stats_frame = ttk.LabelFrame(self.dashboard_frame, text="Estatísticas Gerais")
+        stats_frame.pack(fill='x', padx=10, pady=5)
+        
+        # Grid para estatísticas
+        self.stats_labels = {}
+        stats_data = [
+            ('total_downloads', 'Total de Downloads'),
+            ('successful_downloads', 'Downloads Concluídos'),
+            ('success_rate', 'Taxa de Sucesso (%)'),
+            ('total_size_gb', 'Tamanho Total (GB)'),
+            ('unique_channels', 'Canais Únicos'),
+            ('avg_size_mb', 'Tamanho Médio (MB)')
+        ]
+        
+        for i, (key, label) in enumerate(stats_data):
+            row = i // 3
+            col = (i % 3) * 2
+            
+            ttk.Label(stats_frame, text=f"{label}:").grid(
+                row=row, column=col, sticky='w', padx=5, pady=2
+            )
+            
+            value_label = ttk.Label(stats_frame, text="0", font=('Arial', 10, 'bold'))
+            value_label.grid(row=row, column=col+1, sticky='w', padx=5, pady=2)
+            self.stats_labels[key] = value_label
+        
+        # Frame para top canais
+        channels_frame = ttk.LabelFrame(self.dashboard_frame, text="Top 5 Canais")
+        channels_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        # Treeview para canais
+        self.channels_tree = ttk.Treeview(
+            channels_frame,
+            columns=('downloads', 'size'),
+            show='tree headings',
+            height=6
+        )
+        self.channels_tree.heading('#0', text='Canal')
+        self.channels_tree.heading('downloads', text='Downloads')
+        self.channels_tree.heading('size', text='Tamanho (MB)')
+        
+        self.channels_tree.column('#0', width=300)
+        self.channels_tree.column('downloads', width=100)
+        self.channels_tree.column('size', width=100)
+        
+        # Scrollbar para canais
+        channels_scrollbar = ttk.Scrollbar(channels_frame, orient='vertical', command=self.channels_tree.yview)
+        self.channels_tree.configure(yscrollcommand=channels_scrollbar.set)
+        
+        self.channels_tree.pack(side='left', fill='both', expand=True)
+        channels_scrollbar.pack(side='right', fill='y')
+    
+    def create_charts_tab(self):
+        """Cria a aba de gráficos"""
+        self.charts_frame = ttk.Frame(self.analytics_notebook)
+        self.analytics_notebook.add(self.charts_frame, text="📈 Gráficos")
+        
+        # Frame de controles
+        controls_frame = ttk.Frame(self.charts_frame)
+        controls_frame.pack(fill='x', padx=10, pady=5)
+        
+        # Seletor de período
+        ttk.Label(controls_frame, text="Período:").pack(side='left', padx=5)
+        self.period_var = tk.StringVar(value="30")
+        period_combo = ttk.Combobox(
+            controls_frame,
+            textvariable=self.period_var,
+            values=["7", "30", "90", "365"],
+            state="readonly",
+            width=10
+        )
+        period_combo.pack(side='left', padx=5)
+        period_combo.bind('<<ComboboxSelected>>', self.on_period_change)
+        
+        # Botão para atualizar gráficos
+        ttk.Button(
+            controls_frame,
+            text="Atualizar Gráficos",
+            command=self.update_charts
+        ).pack(side='left', padx=10)
+        
+        # Notebook para diferentes gráficos
+        self.charts_notebook = ttk.Notebook(self.charts_frame)
+        self.charts_notebook.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        # Criar frames para gráficos
+        self.create_resolution_chart()
+        self.create_trend_chart()
+        self.create_hourly_chart()
+        self.create_storage_chart()
+    
+    def create_resolution_chart(self):
+        """Cria gráfico de distribuição por resolução"""
+        self.resolution_frame = ttk.Frame(self.charts_notebook)
+        self.charts_notebook.add(self.resolution_frame, text="Resoluções")
+        
+        # Figura matplotlib
+        self.resolution_fig = Figure(figsize=(8, 6), dpi=100)
+        self.resolution_canvas = FigureCanvasTkAgg(self.resolution_fig, self.resolution_frame)
+        self.resolution_canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def create_trend_chart(self):
+        """Cria gráfico de tendência temporal"""
+        self.trend_frame = ttk.Frame(self.charts_notebook)
+        self.charts_notebook.add(self.trend_frame, text="Tendência")
+        
+        self.trend_fig = Figure(figsize=(8, 6), dpi=100)
+        self.trend_canvas = FigureCanvasTkAgg(self.trend_fig, self.trend_frame)
+        self.trend_canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def create_hourly_chart(self):
+        """Cria gráfico de distribuição por hora"""
+        self.hourly_frame = ttk.Frame(self.charts_notebook)
+        self.charts_notebook.add(self.hourly_frame, text="Por Hora")
+        
+        self.hourly_fig = Figure(figsize=(8, 6), dpi=100)
+        self.hourly_canvas = FigureCanvasTkAgg(self.hourly_fig, self.hourly_frame)
+        self.hourly_canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def create_storage_chart(self):
+        """Cria gráfico de análise de armazenamento"""
+        self.storage_frame = ttk.Frame(self.charts_notebook)
+        self.charts_notebook.add(self.storage_frame, text="Armazenamento")
+        
+        self.storage_fig = Figure(figsize=(8, 6), dpi=100)
+        self.storage_canvas = FigureCanvasTkAgg(self.storage_fig, self.storage_frame)
+        self.storage_canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def create_reports_tab(self):
+        """Cria a aba de relatórios"""
+        self.reports_frame = ttk.Frame(self.analytics_notebook)
+        self.analytics_notebook.add(self.reports_frame, text="📋 Relatórios")
+        
+        # Frame de controles
+        controls_frame = ttk.Frame(self.reports_frame)
+        controls_frame.pack(fill='x', padx=10, pady=5)
+        
+        # Seletor de tipo de relatório
+        ttk.Label(controls_frame, text="Tipo de Relatório:").pack(side='left', padx=5)
+        self.report_type_var = tk.StringVar(value="summary")
+        report_combo = ttk.Combobox(
+            controls_frame,
+            textvariable=self.report_type_var,
+            values=["summary", "detailed", "channels", "resolutions"],
+            state="readonly",
+            width=15
+        )
+        report_combo.pack(side='left', padx=5)
+        
+        # Botões de ação
+        ttk.Button(
+            controls_frame,
+            text="Gerar Relatório",
+            command=self.generate_report
+        ).pack(side='left', padx=10)
+        
+        ttk.Button(
+            controls_frame,
+            text="Exportar PDF",
+            command=self.export_report_pdf
+        ).pack(side='left', padx=5)
+        
+        ttk.Button(
+            controls_frame,
+            text="Exportar CSV",
+            command=self.export_report_csv
+        ).pack(side='left', padx=5)
+        
+        # Área de texto para relatório
+        text_frame = ttk.Frame(self.reports_frame)
+        text_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        self.report_text = tk.Text(
+            text_frame,
+            wrap='word',
+            font=('Consolas', 10)
+        )
+        
+        report_scrollbar = ttk.Scrollbar(text_frame, orient='vertical', command=self.report_text.yview)
+        self.report_text.configure(yscrollcommand=report_scrollbar.set)
+        
+        self.report_text.pack(side='left', fill='both', expand=True)
+        report_scrollbar.pack(side='right', fill='y')
+    
+    def create_recommendations_tab(self):
+        """Cria a aba de recomendações"""
+        self.recommendations_frame = ttk.Frame(self.analytics_notebook)
+        self.analytics_notebook.add(self.recommendations_frame, text="💡 Recomendações")
+        
+        # Frame para recomendações de resolução
+        resolution_rec_frame = ttk.LabelFrame(
+            self.recommendations_frame,
+            text="Recomendação de Resolução"
+        )
+        resolution_rec_frame.pack(fill='x', padx=10, pady=5)
+        
+        self.resolution_rec_label = ttk.Label(
+            resolution_rec_frame,
+            text="Analisando padrões...",
+            font=('Arial', 10)
+        )
+        self.resolution_rec_label.pack(padx=10, pady=5)
+        
+        # Frame para recomendações de horário
+        time_rec_frame = ttk.LabelFrame(
+            self.recommendations_frame,
+            text="Melhor Horário para Downloads"
+        )
+        time_rec_frame.pack(fill='x', padx=10, pady=5)
+        
+        self.time_rec_label = ttk.Label(
+            time_rec_frame,
+            text="Analisando padrões...",
+            font=('Arial', 10)
+        )
+        self.time_rec_label.pack(padx=10, pady=5)
+        
+        # Frame para recomendações de armazenamento
+        storage_rec_frame = ttk.LabelFrame(
+            self.recommendations_frame,
+            text="Gerenciamento de Armazenamento"
+        )
+        storage_rec_frame.pack(fill='both', expand=True, padx=10, pady=5)
+        
+        # Listbox para recomendações de armazenamento
+        self.storage_rec_listbox = tk.Listbox(
+            storage_rec_frame,
+            font=('Arial', 9),
+            height=8
+        )
+        
+        storage_rec_scrollbar = ttk.Scrollbar(
+            storage_rec_frame,
+            orient='vertical',
+            command=self.storage_rec_listbox.yview
+        )
+        self.storage_rec_listbox.configure(yscrollcommand=storage_rec_scrollbar.set)
+        
+        self.storage_rec_listbox.pack(side='left', fill='both', expand=True, padx=5, pady=5)
+        storage_rec_scrollbar.pack(side='right', fill='y', pady=5)
+    
+    def setup_layout(self):
+        """Configura o layout da aba"""
+        self.analytics_notebook.pack(fill='both', expand=True, padx=5, pady=5)
+        self.refresh_button.pack(pady=5)
+    
+    def load_analytics_data(self):
+        """Carrega os dados de análise"""
+        try:
+            # Carregar estatísticas gerais
+            self.update_dashboard_stats()
+            
+            # Carregar gráficos
+            self.update_charts()
+            
+            # Carregar recomendações
+            self.update_recommendations()
+            
+            # Gerar relatório inicial
+            self.generate_report()
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao carregar dados de análise: {e}")
+            messagebox.showerror("Erro", f"Erro ao carregar dados de análise: {e}")
+    
+    def update_dashboard_stats(self):
+        """Atualiza as estatísticas do dashboard"""
+        try:
+            stats = self.analytics_manager.get_download_statistics()
+            
+            for key, label_widget in self.stats_labels.items():
+                value = stats.get(key, 0)
+                if isinstance(value, float):
+                    value = f"{value:.2f}"
+                label_widget.config(text=str(value))
+            
+            # Atualizar top canais
+            self.update_top_channels()
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao atualizar estatísticas: {e}")
+    
+    def update_top_channels(self):
+        """Atualiza a lista de top canais"""
+        try:
+            # Limpar árvore
+            for item in self.channels_tree.get_children():
+                self.channels_tree.delete(item)
+            
+            top_channels = self.analytics_manager.get_top_channels(limit=5)
+            
+            for channel, count in top_channels:
+                # Calcular tamanho aproximado (placeholder)
+                size_mb = count * 50  # Estimativa
+                
+                self.channels_tree.insert(
+                    '',
+                    'end',
+                    text=channel,
+                    values=(count, f"{size_mb:.1f}")
+                )
+                
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao atualizar top canais: {e}")
+    
+    def update_charts(self):
+        """Atualiza todos os gráficos"""
+        try:
+            period_days = int(self.period_var.get())
+            
+            # Atualizar gráfico de resolução
+            self.update_resolution_chart(period_days)
+            
+            # Atualizar gráfico de tendência
+            self.update_trend_chart(period_days)
+            
+            # Atualizar gráfico por hora
+            self.update_hourly_chart(period_days)
+            
+            # Atualizar gráfico de armazenamento
+            self.update_storage_chart()
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao atualizar gráficos: {e}")
+    
+    def update_resolution_chart(self, period_days):
+        """Atualiza o gráfico de distribuição por resolução"""
+        try:
+            self.resolution_fig.clear()
+            ax = self.resolution_fig.add_subplot(111)
+            
+            distribution = self.analytics_manager.get_resolution_distribution(period_days)
+            
+            if distribution:
+                resolutions = list(distribution.keys())
+                counts = list(distribution.values())
+                
+                colors_list = plt.cm.Set3(np.linspace(0, 1, len(resolutions)))
+                
+                wedges, texts, autotexts = ax.pie(
+                    counts,
+                    labels=resolutions,
+                    autopct='%1.1f%%',
+                    colors=colors_list,
+                    startangle=90
+                )
+                
+                ax.set_title(f'Distribuição por Resolução ({period_days} dias)', fontsize=12, color='white')
+                
+                # Configurar cores do texto
+                for text in texts:
+                    text.set_color('white')
+                for autotext in autotexts:
+                    autotext.set_color('black')
+                    autotext.set_fontweight('bold')
+            else:
+                ax.text(0.5, 0.5, 'Sem dados disponíveis', 
+                       horizontalalignment='center', verticalalignment='center',
+                       transform=ax.transAxes, fontsize=12, color='white')
+            
+            self.resolution_fig.patch.set_facecolor('#2e2e2e')
+            ax.set_facecolor('#2e2e2e')
+            self.resolution_canvas.draw()
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao atualizar gráfico de resolução: {e}")
+    
+    def update_trend_chart(self, period_days):
+        """Atualiza o gráfico de tendência temporal"""
+        try:
+            self.trend_fig.clear()
+            ax = self.trend_fig.add_subplot(111)
+            
+            trend_data = self.analytics_manager.get_daily_download_trend(period_days)
+            
+            if trend_data['dates'] and trend_data['counts']:
+                dates = [datetime.strptime(date, '%Y-%m-%d') for date in trend_data['dates']]
+                counts = trend_data['counts']
+                
+                ax.plot(dates, counts, marker='o', linewidth=2, markersize=4, color='#00ff88')
+                ax.fill_between(dates, counts, alpha=0.3, color='#00ff88')
+                
+                ax.set_title(f'Tendência de Downloads ({period_days} dias)', fontsize=12, color='white')
+                ax.set_xlabel('Data', color='white')
+                ax.set_ylabel('Número de Downloads', color='white')
+                
+                # Configurar cores dos eixos
+                ax.tick_params(colors='white')
+                ax.spines['bottom'].set_color('white')
+                ax.spines['top'].set_color('white')
+                ax.spines['right'].set_color('white')
+                ax.spines['left'].set_color('white')
+                
+                # Rotacionar labels das datas
+                plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+            else:
+                ax.text(0.5, 0.5, 'Sem dados disponíveis', 
+                       horizontalalignment='center', verticalalignment='center',
+                       transform=ax.transAxes, fontsize=12, color='white')
+            
+            self.trend_fig.patch.set_facecolor('#2e2e2e')
+            ax.set_facecolor('#2e2e2e')
+            self.trend_fig.tight_layout()
+            self.trend_canvas.draw()
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao atualizar gráfico de tendência: {e}")
+    
+    def update_hourly_chart(self, period_days):
+        """Atualiza o gráfico de distribuição por hora"""
+        try:
+            self.hourly_fig.clear()
+            ax = self.hourly_fig.add_subplot(111)
+            
+            hourly_dist = self.analytics_manager.get_hourly_distribution(period_days)
+            
+            if hourly_dist:
+                hours = list(range(24))
+                counts = [hourly_dist.get(hour, 0) for hour in hours]
+                
+                bars = ax.bar(hours, counts, color='#ff6b6b', alpha=0.7)
+                
+                # Destacar hora de pico
+                max_hour = max(hourly_dist.items(), key=lambda x: x[1])[0] if hourly_dist else 0
+                if max_hour < len(bars):
+                    bars[max_hour].set_color('#ff3333')
+                
+                ax.set_title(f'Downloads por Hora do Dia ({period_days} dias)', fontsize=12, color='white')
+                ax.set_xlabel('Hora do Dia', color='white')
+                ax.set_ylabel('Número de Downloads', color='white')
+                ax.set_xticks(range(0, 24, 2))
+                
+                # Configurar cores
+                ax.tick_params(colors='white')
+                ax.spines['bottom'].set_color('white')
+                ax.spines['top'].set_color('white')
+                ax.spines['right'].set_color('white')
+                ax.spines['left'].set_color('white')
+            else:
+                ax.text(0.5, 0.5, 'Sem dados disponíveis', 
+                       horizontalalignment='center', verticalalignment='center',
+                       transform=ax.transAxes, fontsize=12, color='white')
+            
+            self.hourly_fig.patch.set_facecolor('#2e2e2e')
+            ax.set_facecolor('#2e2e2e')
+            self.hourly_canvas.draw()
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao atualizar gráfico por hora: {e}")
+    
+    def update_storage_chart(self):
+        """Atualiza o gráfico de análise de armazenamento"""
+        try:
+            self.storage_fig.clear()
+            ax = self.storage_fig.add_subplot(111)
+            
+            storage_analysis = self.analytics_manager.get_storage_analysis()
+            
+            if storage_analysis['by_resolution']:
+                resolutions = [item['resolution'] for item in storage_analysis['by_resolution']]
+                sizes = [item['total_size_mb'] for item in storage_analysis['by_resolution']]
+                
+                colors_list = plt.cm.viridis(np.linspace(0, 1, len(resolutions)))
+                
+                bars = ax.bar(resolutions, sizes, color=colors_list)
+                
+                ax.set_title('Uso de Armazenamento por Resolução', fontsize=12, color='white')
+                ax.set_xlabel('Resolução', color='white')
+                ax.set_ylabel('Tamanho Total (MB)', color='white')
+                
+                # Rotacionar labels
+                plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+                
+                # Configurar cores
+                ax.tick_params(colors='white')
+                ax.spines['bottom'].set_color('white')
+                ax.spines['top'].set_color('white')
+                ax.spines['right'].set_color('white')
+                ax.spines['left'].set_color('white')
+            else:
+                ax.text(0.5, 0.5, 'Sem dados disponíveis', 
+                       horizontalalignment='center', verticalalignment='center',
+                       transform=ax.transAxes, fontsize=12, color='white')
+            
+            self.storage_fig.patch.set_facecolor('#2e2e2e')
+            ax.set_facecolor('#2e2e2e')
+            self.storage_fig.tight_layout()
+            self.storage_canvas.draw()
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao atualizar gráfico de armazenamento: {e}")
+    
+    def update_recommendations(self):
+        """Atualiza as recomendações"""
+        try:
+            # Recomendação de resolução
+            resolution_rec = self.recommendation_engine.get_resolution_recommendation()
+            resolution_text = f"Resolução recomendada: {resolution_rec['recommended_resolution']}\n"
+            resolution_text += f"Motivo: {resolution_rec['reason']}\n"
+            resolution_text += f"Confiança: {resolution_rec['confidence']*100:.1f}%"
+            self.resolution_rec_label.config(text=resolution_text)
+            
+            # Recomendação de horário
+            time_rec = self.recommendation_engine.get_optimal_download_time()
+            time_text = f"Melhores horários: {', '.join(map(str, time_rec['recommended_hours'][:3]))}h\n"
+            time_text += f"Horário de pico: {time_rec['peak_hour']}h\n"
+            time_text += f"Motivo: {time_rec['reason']}"
+            self.time_rec_label.config(text=time_text)
+            
+            # Recomendações de armazenamento
+            storage_recs = self.recommendation_engine.get_storage_recommendations()
+            self.storage_rec_listbox.delete(0, tk.END)
+            
+            if storage_recs:
+                for rec in storage_recs:
+                    priority_icon = "🔴" if rec['priority'] == 'high' else "🟡" if rec['priority'] == 'medium' else "🟢"
+                    text = f"{priority_icon} {rec['title']}: {rec['description']}"
+                    self.storage_rec_listbox.insert(tk.END, text)
+            else:
+                self.storage_rec_listbox.insert(tk.END, "✅ Nenhuma recomendação no momento")
+                
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao atualizar recomendações: {e}")
+    
+    def generate_report(self):
+        """Gera relatório baseado no tipo selecionado"""
+        try:
+            report_type = self.report_type_var.get()
+            
+            self.report_text.delete(1.0, tk.END)
+            
+            if report_type == "summary":
+                report = self.generate_summary_report()
+            elif report_type == "detailed":
+                report = self.generate_detailed_report()
+            elif report_type == "channels":
+                report = self.generate_channels_report()
+            elif report_type == "resolutions":
+                report = self.generate_resolutions_report()
+            else:
+                report = "Tipo de relatório não reconhecido."
+            
+            self.report_text.insert(1.0, report)
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao gerar relatório: {e}")
+            self.report_text.insert(1.0, f"Erro ao gerar relatório: {e}")
+    
+    def generate_summary_report(self):
+        """Gera relatório resumido"""
+        stats = self.analytics_manager.get_download_statistics()
+        
+        report = f"""RELATÓRIO RESUMIDO DE DOWNLOADS
+{'='*50}
+Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+ESTATÍSTICAS GERAIS (30 dias):
+{'-'*30}
+Total de Downloads: {stats.get('total_downloads', 0)}
+Downloads Concluídos: {stats.get('successful_downloads', 0)}
+Taxa de Sucesso: {stats.get('success_rate', 0):.2f}%
+Tamanho Total: {stats.get('total_size_gb', 0):.2f} GB
+Tamanho Médio: {stats.get('avg_size_mb', 0):.2f} MB
+Canais Únicos: {stats.get('unique_channels', 0)}
+Downloads de Áudio: {stats.get('audio_downloads', 0)}
+Downloads de Vídeo: {stats.get('video_downloads', 0)}
+
+TOP 5 CANAIS:
+{'-'*15}"""
+        
+        top_channels = self.analytics_manager.get_top_channels(limit=5)
+        for i, (channel, count) in enumerate(top_channels, 1):
+            report += f"\n{i}. {channel}: {count} downloads"
+        
+        return report
+    
+    def generate_detailed_report(self):
+        """Gera relatório detalhado"""
+        stats = self.analytics_manager.get_download_statistics()
+        resolution_dist = self.analytics_manager.get_resolution_distribution()
+        storage_analysis = self.analytics_manager.get_storage_analysis()
+        
+        report = f"""RELATÓRIO DETALHADO DE DOWNLOADS
+{'='*50}
+Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+ESTATÍSTICAS GERAIS:
+{'-'*20}
+Período analisado: 30 dias
+Total de Downloads: {stats.get('total_downloads', 0)}
+Downloads Concluídos: {stats.get('successful_downloads', 0)}
+Downloads com Erro: {stats.get('failed_downloads', 0)}
+Taxa de Sucesso: {stats.get('success_rate', 0):.2f}%
+
+ARMAZENAMENTO:
+{'-'*15}
+Tamanho Total: {stats.get('total_size_gb', 0):.2f} GB
+Tamanho Médio por Download: {stats.get('avg_size_mb', 0):.2f} MB
+Total de Arquivos: {storage_analysis.get('total_files', 0)}
+
+DISTRIBUIÇÃO POR RESOLUÇÃO:
+{'-'*30}"""
+        
+        for resolution, count in resolution_dist.items():
+            percentage = (count / stats.get('total_downloads', 1)) * 100
+            report += f"\n{resolution}: {count} downloads ({percentage:.1f}%)"
+        
+        report += f"\n\nANÁLISE DE ARMAZENAMENTO POR RESOLUÇÃO:\n{'-'*40}"
+        for item in storage_analysis.get('by_resolution', []):
+            report += f"\n{item['resolution']}: {item['total_size_mb']:.1f} MB ({item['count']} arquivos)"
+        
+        return report
+    
+    def generate_channels_report(self):
+        """Gera relatório de canais"""
+        top_channels = self.analytics_manager.get_top_channels(limit=20)
+        
+        report = f"""RELATÓRIO DE CANAIS
+{'='*30}
+Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+TOP 20 CANAIS MAIS BAIXADOS:
+{'-'*35}"""
+        
+        for i, (channel, count) in enumerate(top_channels, 1):
+            report += f"\n{i:2d}. {channel:<40} {count:>3d} downloads"
+        
+        return report
+    
+    def generate_resolutions_report(self):
+        """Gera relatório de resoluções"""
+        resolution_dist = self.analytics_manager.get_resolution_distribution()
+        storage_analysis = self.analytics_manager.get_storage_analysis()
+        
+        report = f"""RELATÓRIO DE RESOLUÇÕES
+{'='*35}
+Data: {datetime.now().strftime('%d/%m/%Y %H:%M')}
+
+DISTRIBUIÇÃO POR RESOLUÇÃO:
+{'-'*30}"""
+        
+        total_downloads = sum(resolution_dist.values()) if resolution_dist else 1
+        
+        for resolution, count in resolution_dist.items():
+            percentage = (count / total_downloads) * 100
+            report += f"\n{resolution:<15} {count:>4d} downloads ({percentage:>5.1f}%)"
+        
+        report += f"\n\nUSO DE ARMAZENAMENTO POR RESOLUÇÃO:\n{'-'*40}"
+        for item in storage_analysis.get('by_resolution', []):
+            avg_size = item['avg_size_mb']
+            report += f"\n{item['resolution']:<15} {item['total_size_mb']:>8.1f} MB (média: {avg_size:.1f} MB)"
+        
+        return report
+    
+    def export_report_pdf(self):
+        """Exporta relatório atual para PDF"""
+        try:
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".pdf",
+                filetypes=[("PDF files", "*.pdf")],
+                title="Salvar Relatório PDF"
+            )
+            
+            if filename:
+                report_content = self.report_text.get(1.0, tk.END)
+                
+                doc = SimpleDocTemplate(filename, pagesize=A4)
+                styles = getSampleStyleSheet()
+                story = []
+                
+                # Título
+                title_style = ParagraphStyle(
+                    'CustomTitle',
+                    parent=styles['Heading1'],
+                    fontSize=16,
+                    spaceAfter=30,
+                    alignment=1  # Center
+                )
+                story.append(Paragraph("Relatório de Analytics - YouTube Downloader", title_style))
+                story.append(Spacer(1, 12))
+                
+                # Conteúdo
+                content_style = ParagraphStyle(
+                    'CustomContent',
+                    parent=styles['Normal'],
+                    fontSize=10,
+                    fontName='Courier'
+                )
+                
+                # Dividir conteúdo em linhas e criar parágrafos
+                lines = report_content.split('\n')
+                for line in lines:
+                    if line.strip():
+                        story.append(Paragraph(line, content_style))
+                    else:
+                        story.append(Spacer(1, 6))
+                
+                doc.build(story)
+                messagebox.showinfo("Sucesso", f"Relatório exportado para: {filename}")
+                
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao exportar PDF: {e}")
+            messagebox.showerror("Erro", f"Erro ao exportar PDF: {e}")
+    
+    def export_report_csv(self):
+        """Exporta dados para CSV"""
+        try:
+            filename = filedialog.asksaveasfilename(
+                defaultextension=".csv",
+                filetypes=[("CSV files", "*.csv")],
+                title="Salvar Dados CSV"
+            )
+            
+            if filename:
+                report_type = self.report_type_var.get()
+                
+                with open(filename, 'w', newline='', encoding='utf-8') as csvfile:
+                    writer = csv.writer(csvfile)
+                    
+                    if report_type == "channels":
+                        writer.writerow(['Canal', 'Downloads'])
+                        top_channels = self.analytics_manager.get_top_channels(limit=50)
+                        for channel, count in top_channels:
+                            writer.writerow([channel, count])
+                    
+                    elif report_type == "resolutions":
+                        writer.writerow(['Resolução', 'Downloads', 'Tamanho Total (MB)', 'Tamanho Médio (MB)'])
+                        resolution_dist = self.analytics_manager.get_resolution_distribution()
+                        storage_analysis = self.analytics_manager.get_storage_analysis()
+                        
+                        storage_by_res = {item['resolution']: item for item in storage_analysis.get('by_resolution', [])}
+                        
+                        for resolution, count in resolution_dist.items():
+                            storage_info = storage_by_res.get(resolution, {})
+                            total_size = storage_info.get('total_size_mb', 0)
+                            avg_size = storage_info.get('avg_size_mb', 0)
+                            writer.writerow([resolution, count, total_size, avg_size])
+                    
+                    else:
+                        # Exportar estatísticas gerais
+                        stats = self.analytics_manager.get_download_statistics()
+                        writer.writerow(['Métrica', 'Valor'])
+                        for key, value in stats.items():
+                            writer.writerow([key.replace('_', ' ').title(), value])
+                
+                messagebox.showinfo("Sucesso", f"Dados exportados para: {filename}")
+                
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao exportar CSV: {e}")
+            messagebox.showerror("Erro", f"Erro ao exportar CSV: {e}")
+    
+    def on_period_change(self, event=None):
+        """Callback para mudança de período"""
+        self.update_charts()
+    
+    def refresh_analytics(self):
+        """Atualiza todos os dados de análise"""
+        try:
+            # Limpar cache
+            self.analytics_manager.clear_cache()
+            
+            # Recarregar dados
+            self.load_analytics_data()
+            
+            messagebox.showinfo("Sucesso", "Dados de análise atualizados!")
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao atualizar análise: {e}")
+            messagebox.showerror("Erro", f"Erro ao atualizar análise: {e}")
