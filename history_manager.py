@@ -1,6 +1,6 @@
 import os
 import subprocess
-from datetime import datetime
+from datetime import datetime, timedelta
 from database_manager import DatabaseManager
 from utils import AppUtils, AppConstants
 
@@ -71,7 +71,7 @@ class HistoryManager:
     
     def get_recent_downloads(self, limit=None):
         """
-        Obtém downloads recentes
+        Obtém downloads recentes (método legado)
         
         Args:
             limit (int): Número máximo de downloads (opcional)
@@ -83,20 +83,230 @@ class HistoryManager:
             if limit is None:
                 limit = AppConstants.DEFAULT_HISTORY_LIMIT
             
-            downloads = self.db_manager.get_recent_downloads(limit)
-            
-            # Formatar dados para exibição
-            formatted_downloads = []
-            for download in downloads:
-                formatted_download = self._format_download_for_display(download)
-                formatted_downloads.append(formatted_download)
-            
-            return formatted_downloads
+            # Usar método paginado para compatibilidade
+            result = self.get_downloads_paginated(page=1, per_page=limit)
+            return result['downloads']
             
         except Exception as e:
             if self.log_manager:
                 self.log_manager.log_error(e, "Erro ao obter histórico")
             return []
+    
+    def filter_downloads_by_resolution(self, resolution, page=1, per_page=50):
+        """
+        Filtra downloads por resolução
+        
+        Args:
+            resolution (str): Resolução para filtrar
+            page (int): Página atual
+            per_page (int): Itens por página
+            
+        Returns:
+            dict: Resultado paginado com downloads filtrados
+        """
+        filters = {'resolution': resolution}
+        return self.get_downloads_paginated(page, per_page, filters)
+    
+    def filter_downloads_by_status(self, status, page=1, per_page=50):
+        """
+        Filtra downloads por status
+        
+        Args:
+            status (str): Status para filtrar
+            page (int): Página atual
+            per_page (int): Itens por página
+            
+        Returns:
+            dict: Resultado paginado com downloads filtrados
+        """
+        filters = {'status': status}
+        return self.get_downloads_paginated(page, per_page, filters)
+    
+    def get_downloads_paginated(self, page=1, per_page=50, filters=None):
+        """
+        Obtém downloads com paginação e filtros
+        
+        Args:
+            page (int): Número da página (começando em 1)
+            per_page (int): Número de itens por página
+            filters (dict): Filtros opcionais (search_query, resolution, status, period, etc.)
+            
+        Returns:
+            dict: Dados paginados com downloads e informações de paginação
+        """
+        try:
+            # Processar filtros e converter período em datas
+            processed_filters = self._process_filters(filters) if filters else None
+            
+            # Obter dados paginados do banco
+            result = self.db_manager.get_downloads_paginated(page, per_page, processed_filters)
+            
+            # Formatar downloads para exibição
+            formatted_downloads = []
+            for download in result['downloads']:
+                formatted_download = self._format_download_for_display(download)
+                formatted_downloads.append(formatted_download)
+            
+            # Retornar resultado formatado
+            return {
+                'downloads': formatted_downloads,
+                'pagination': result['pagination']
+            }
+            
+        except Exception as e:
+            if self.log_manager:
+                self.log_manager.log_error(e, "Erro ao obter downloads paginados")
+            return {
+                'downloads': [],
+                'pagination': {
+                    'current_page': 1,
+                    'per_page': per_page,
+                    'total_count': 0,
+                    'total_pages': 0,
+                    'has_previous': False,
+                    'has_next': False
+                }
+            }
+    
+    def get_total_downloads_count(self, filters=None):
+        """
+        Obtém contagem total de downloads com filtros opcionais
+        
+        Args:
+            filters (dict): Filtros opcionais
+            
+        Returns:
+            int: Número total de downloads
+        """
+        try:
+            # Processar filtros e converter período em datas
+            processed_filters = self._process_filters(filters) if filters else None
+            return self.db_manager.get_total_downloads_count(processed_filters)
+        except Exception as e:
+            if self.log_manager:
+                self.log_manager.log_error(e, "Erro ao obter contagem de downloads")
+            return 0
+    
+    def search_downloads(self, search_query, page=1, per_page=50):
+        """
+        Busca downloads por termo de pesquisa
+        
+        Args:
+            search_query (str): Termo de busca
+            page (int): Página atual
+            per_page (int): Itens por página
+            
+        Returns:
+            dict: Resultado paginado com downloads encontrados
+        """
+        filters = {'search_query': search_query}
+        return self.get_downloads_paginated(page, per_page, filters)
+    
+    def get_all_downloads_filtered(self, filters=None):
+        """
+        Obtém todos os downloads filtrados (sem paginação) para exportação
+        
+        Args:
+            filters (dict): Filtros a serem aplicados
+            
+        Returns:
+            list: Lista de todos os downloads que atendem aos filtros
+        """
+        try:
+            # Processar filtros e converter período em datas
+            processed_filters = self._process_filters(filters) if filters else None
+            
+            # Obter todos os downloads do banco de dados
+            downloads = self.db_manager.get_all_downloads_filtered(processed_filters)
+            
+            # Formatar dados para exibição
+            formatted_downloads = []
+            for download in downloads:
+                formatted = self._format_download_for_display(download)
+                formatted_downloads.append(formatted)
+            
+            return formatted_downloads
+            
+        except Exception as e:
+            if self.log_manager:
+                self.log_manager.log_error(e, "Erro ao obter downloads filtrados para exportação")
+            return []
+    
+    def _process_filters(self, filters):
+        """
+        Processa filtros e converte período em datas específicas
+        
+        Args:
+            filters (dict): Filtros originais
+            
+        Returns:
+            dict: Filtros processados com datas convertidas
+        """
+        if not filters:
+            return None
+        
+        processed_filters = filters.copy()
+        
+        # Converter filtro de resolução (Audio -> music)
+        if 'resolution' in processed_filters:
+            resolution = processed_filters['resolution']
+            if resolution == 'Audio':
+                processed_filters['resolution'] = 'music'
+        
+        # Converter filtro de período em datas
+        if 'period' in processed_filters:
+            period = processed_filters.pop('period')
+            date_range = self._get_date_range_for_period(period)
+            
+            if date_range:
+                processed_filters.update(date_range)
+        
+        return processed_filters
+    
+    def _get_date_range_for_period(self, period):
+        """
+        Converte período em intervalo de datas
+        
+        Args:
+            period (str): Período selecionado
+            
+        Returns:
+            dict: Dicionário com date_from e/ou date_to
+        """
+        now = datetime.now()
+        
+        if period == "Hoje":
+            today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+            return {
+                'date_from': today_start.strftime('%Y-%m-%d %H:%M:%S')
+            }
+        
+        elif period == "Última semana":
+            week_ago = now - timedelta(days=7)
+            return {
+                'date_from': week_ago.strftime('%Y-%m-%d %H:%M:%S')
+            }
+        
+        elif period == "Último mês":
+            month_ago = now - timedelta(days=30)
+            return {
+                'date_from': month_ago.strftime('%Y-%m-%d %H:%M:%S')
+            }
+        
+        elif period == "Últimos 3 meses":
+            three_months_ago = now - timedelta(days=90)
+            return {
+                'date_from': three_months_ago.strftime('%Y-%m-%d %H:%M:%S')
+            }
+        
+        elif period == "Último ano":
+            year_ago = now - timedelta(days=365)
+            return {
+                'date_from': year_ago.strftime('%Y-%m-%d %H:%M:%S')
+            }
+        
+        # Para "Todos" ou período não reconhecido, não adicionar filtro de data
+        return None
     
     def _format_download_for_display(self, download):
         """Formata dados do download para exibição na interface"""

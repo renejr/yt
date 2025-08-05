@@ -1,0 +1,96 @@
+# Changelog - YouTube Downloader
+
+Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
+
+## [2.1.4] - 2024-12-19
+
+### ✨ Novas Funcionalidades
+- **Exportação de Dados**: Funcionalidade completa de exportação do histórico
+  - Exportação para CSV com dados estruturados
+  - Exportação para PDF com relatórios profissionais
+  - Suporte a filtros avançados (busca, resolução, status, período)
+  - Seleção de local de salvamento
+  - Informações contextuais nos relatórios
+  - Performance otimizada para grandes volumes de dados
+
+### 🔧 Melhorias
+- Atualização da versão da aplicação para 2.1.4
+- Correção da referência do arquivo principal no instalador (yt.py → yt_refactored.py)
+- Adição da dependência `reportlab` para geração de PDFs
+- Documentação completa da nova funcionalidade
+
+### 📚 Documentação
+- Criação do arquivo `EXPORT_FEATURE.md` com documentação detalhada
+- Atualização do `README.md` com instruções de uso
+- Atualização das estatísticas de performance
+
+---
+
+## [2.1.3] - 2024-12-18
+
+### ✨ Novas Funcionalidades
+- **Suporte a Playlists**: Download completo de playlists do YouTube
+  - Interface dedicada para playlists
+  - Seleção individual de vídeos
+  - Progress tracking por vídeo
+  - Histórico integrado
+
+### 🐛 Correções
+- Correção de bugs críticos no sistema de configurações
+- Melhorias na estabilidade geral
+- Otimizações de performance
+
+---
+
+## [2.1] - 2024-12-17
+
+### 🔄 Refatoração Completa
+- **Arquitetura Modular**: Separação completa em módulos especializados
+  - `download_manager.py` - Gerenciamento de downloads
+  - `history_manager.py` - Histórico de downloads
+  - `config_manager.py` - Configurações da aplicação
+  - `database_manager.py` - Operações de banco de dados
+  - `ui_components.py` - Interface do usuário
+  - `log_manager.py` - Sistema de logs
+  - `utils.py` - Utilitários e constantes
+
+### ✨ Novas Funcionalidades
+- **Mini-Player**: Reprodução de vídeos baixados
+- **Sistema de Histórico**: Rastreamento completo de downloads
+- **Configurações Avançadas**: Temas, resoluções padrão, auto-abertura
+- **Sistema de Logs**: Logging detalhado para debugging
+- **Interface Melhorada**: Design mais moderno e intuitivo
+
+### 🚀 Melhorias de Performance
+- Redução significativa no número de linhas de código
+- Melhor manutenibilidade
+- Taxa de sucesso de downloads aumentada
+- Tratamento de erros aprimorado
+- Experiência do usuário otimizada
+
+### 🛠️ Tecnologias
+- Python 3.7+
+- tkinter para interface gráfica
+- yt-dlp para downloads
+- SQLite para banco de dados
+- FFmpeg para processamento de mídia
+- Pillow para manipulação de imagens
+- py7zr para compressão
+- requests para requisições HTTP
+- reportlab para geração de PDFs
+
+---
+
+## Formato
+
+Este changelog segue o formato [Keep a Changelog](https://keepachangelog.com/pt-BR/1.0.0/),
+e este projeto adere ao [Semantic Versioning](https://semver.org/lang/pt-BR/).
+
+### Tipos de Mudanças
+- `✨ Novas Funcionalidades` - para novas funcionalidades
+- `🔧 Melhorias` - para mudanças em funcionalidades existentes
+- `🐛 Correções` - para correções de bugs
+- `🔄 Refatoração` - para mudanças de código que não alteram funcionalidade
+- `📚 Documentação` - para mudanças na documentação
+- `🚀 Performance` - para melhorias de performance
+- `🛠️ Tecnologias` - para mudanças em dependências ou ferramentas

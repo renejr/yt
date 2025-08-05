@@ -199,7 +199,7 @@ class AppConstants:
     """Constantes gerais da aplicação"""
     
     # Versão da aplicação
-    VERSION = "2.1"
+    VERSION = "2.1.4"
     
     # Configurações de download
     DEFAULT_RESOLUTION = "1080p"
