@@ -52,27 +52,134 @@ class DatabaseManager:
             conn.close()
     
     def get_recent_downloads(self, limit=50):
-        """Obtém downloads recentes para o histórico"""
+        """Obtém downloads recentes para o histórico (método legado)"""
+        return self.get_downloads_paginated(page=1, per_page=limit)['downloads']
+    
+    def get_downloads_paginated(self, page=1, per_page=50, filters=None):
+        """Obtém downloads com paginação e filtros opcionais"""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         try:
-            cursor.execute("""
+            # Construir query base
+            base_query = """
                 SELECT id, url, title, duration, resolution, file_size, 
                        download_path, status, thumbnail_url, uploader, 
                        view_count, like_count, description, download_date as timestamp
-                FROM downloads 
-                ORDER BY download_date DESC 
-                LIMIT ?
-            """, (limit,))
+                FROM downloads
+            """
             
+            # Construir condições WHERE se houver filtros
+            where_conditions = []
+            params = []
+            
+            if filters:
+                if filters.get('search_query'):
+                    where_conditions.append("title LIKE ?")
+                    params.append(f"%{filters['search_query']}%")
+                
+                if filters.get('resolution'):
+                    where_conditions.append("resolution = ?")
+                    params.append(filters['resolution'])
+                
+                if filters.get('status'):
+                    where_conditions.append("status = ?")
+                    params.append(filters['status'])
+                
+                if filters.get('date_from'):
+                    where_conditions.append("download_date >= ?")
+                    params.append(filters['date_from'])
+                
+                if filters.get('date_to'):
+                    where_conditions.append("download_date <= ?")
+                    params.append(filters['date_to'])
+            
+            # Montar query completa
+            if where_conditions:
+                base_query += " WHERE " + " AND ".join(where_conditions)
+            
+            # Adicionar ordenação e paginação
+            offset = (page - 1) * per_page
+            query = base_query + " ORDER BY download_date DESC LIMIT ? OFFSET ?"
+            params.extend([per_page, offset])
+            
+            # Executar query principal
+            cursor.execute(query, params)
             columns = [description[0] for description in cursor.description]
-            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            return results
+            downloads = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            
+            # Obter contagem total
+            count_query = "SELECT COUNT(*) FROM downloads"
+            if where_conditions:
+                count_query += " WHERE " + " AND ".join(where_conditions)
+            
+            cursor.execute(count_query, params[:-2])  # Remover LIMIT e OFFSET dos parâmetros
+            total_count = cursor.fetchone()[0]
+            
+            # Calcular informações de paginação
+            total_pages = (total_count + per_page - 1) // per_page  # Ceiling division
+            
+            return {
+                'downloads': downloads,
+                'pagination': {
+                    'current_page': page,
+                    'per_page': per_page,
+                    'total_count': total_count,
+                    'total_pages': total_pages,
+                    'has_previous': page > 1,
+                    'has_next': page < total_pages
+                }
+            }
             
         except Exception as e:
-            logging.error(f"Erro ao obter downloads recentes: {e}")
-            return []
+            logging.error(f"Erro ao obter downloads paginados: {e}")
+            return {
+                'downloads': [],
+                'pagination': {
+                    'current_page': 1,
+                    'per_page': per_page,
+                    'total_count': 0,
+                    'total_pages': 0,
+                    'has_previous': False,
+                    'has_next': False
+                }
+            }
+        finally:
+            conn.close()
+    
+    def get_total_downloads_count(self, filters=None):
+        """Obtém contagem total de downloads com filtros opcionais"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            query = "SELECT COUNT(*) FROM downloads"
+            params = []
+            
+            if filters:
+                where_conditions = []
+                
+                if filters.get('search_query'):
+                    where_conditions.append("title LIKE ?")
+                    params.append(f"%{filters['search_query']}%")
+                
+                if filters.get('resolution'):
+                    where_conditions.append("resolution = ?")
+                    params.append(filters['resolution'])
+                
+                if filters.get('status'):
+                    where_conditions.append("status = ?")
+                    params.append(filters['status'])
+                
+                if where_conditions:
+                    query += " WHERE " + " AND ".join(where_conditions)
+            
+            cursor.execute(query, params)
+            return cursor.fetchone()[0]
+            
+        except Exception as e:
+            logging.error(f"Erro ao obter contagem de downloads: {e}")
+            return 0
         finally:
             conn.close()
     
@@ -139,6 +246,77 @@ class DatabaseManager:
         except Exception as e:
             logging.error(f"Erro ao remover download: {e}")
             return False
+        finally:
+            conn.close()
+    
+    def get_all_downloads_filtered(self, filters=None):
+        """Obtém todos os downloads filtrados (sem paginação) para exportação"""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        try:
+            # Query base
+            query = """
+                SELECT id, url, title, resolution, download_path, file_size, 
+                       download_date as timestamp, status
+                FROM downloads
+            """
+            
+            params = []
+            conditions = []
+            
+            # Aplicar filtros se fornecidos
+            if filters:
+                if 'search_query' in filters:
+                    conditions.append("(title LIKE ? OR url LIKE ?)")
+                    search_term = f"%{filters['search_query']}%"
+                    params.extend([search_term, search_term])
+                
+                if 'resolution' in filters:
+                    conditions.append("resolution = ?")
+                    params.append(filters['resolution'])
+                
+                if 'status' in filters:
+                    conditions.append("status = ?")
+                    params.append(filters['status'])
+                
+                if 'date_from' in filters:
+                    conditions.append("download_date >= ?")
+                    params.append(filters['date_from'])
+                
+                if 'date_to' in filters:
+                    conditions.append("download_date <= ?")
+                    params.append(filters['date_to'])
+            
+            # Adicionar condições WHERE se existirem
+            if conditions:
+                query += " WHERE " + " AND ".join(conditions)
+            
+            # Ordenar por data de download (mais recente primeiro)
+            query += " ORDER BY download_date DESC"
+            
+            cursor.execute(query, params)
+            rows = cursor.fetchall()
+            
+            # Converter para lista de dicionários
+            downloads = []
+            for row in rows:
+                downloads.append({
+                    'id': row[0],
+                    'url': row[1],
+                    'title': row[2],
+                    'resolution': row[3],
+                    'file_path': row[4],
+                    'file_size': row[5],
+                    'timestamp': row[6],
+                    'status': row[7]
+                })
+            
+            return downloads
+            
+        except Exception as e:
+            logging.error(f"Erro ao obter downloads filtrados: {e}")
+            return []
         finally:
             conn.close()
     

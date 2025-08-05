@@ -1,8 +1,8 @@
-# YouTube Video Downloader v2.1.3 - Playlists e Correções
+# YouTube Video Downloader v2.1.4 - Exportação de Dados
 
 🎬 **Aplicativo desktop modular em Python para baixar vídeos do YouTube com interface gráfica moderna e arquitetura robusta.**
 
-> **Versão 2.1.3**: Download de playlists completas implementado com correções críticas no mini-player, histórico e widget de informações.
+> **Versão 2.1.4**: Funcionalidade de exportação de dados implementada - exporte seu histórico em CSV e PDF com filtros avançados.
 
 ## ✨ Funcionalidades
 
@@ -15,6 +15,7 @@
 - **Widget de informações avançado** com conteúdo completo, links clicáveis e sistema de cópia
 - **Extração automática** de informações completas do vídeo
 - **Sistema de histórico** completo com busca e filtros
+- **📊 Exportação de dados** - Exporte histórico em CSV e PDF com filtros aplicados
 - **Configurações personalizáveis** (temas, resolução padrão, auto-abertura)
 - **Sistema de logs avançado** com rotação e compactação automática
 - **Suporte robusto** a fragmentos e downloads instáveis
@@ -34,6 +35,14 @@
 - **🎨 Formatação inteligente** - Duração, visualizações e datas formatadas
 - **⚡ Interface otimizada** - Scrollbar fluida, cursores intuitivos e feedback visual
 
+### 📊 Exportação de Dados
+- **📄 Formato CSV** - Compatível com Excel, Google Sheets e outras planilhas
+- **📑 Formato PDF** - Relatórios profissionais em A4 com layout formatado
+- **🔍 Filtros aplicados** - Exporta apenas dados que atendem aos filtros ativos
+- **📅 Informações contextuais** - Data de geração e filtros aplicados incluídos
+- **📊 Dados completos** - Todos os campos do histórico (título, URL, resolução, etc.)
+- **💾 Seleção de local** - Escolha onde salvar os arquivos exportados
+
 ### 🚀 Melhorias da Versão 2.1
 - **Arquitetura modular** - Código organizado em módulos especializados
 - **Mini-player de preview** - Visualização rica com thumbnail e metadados do vídeo
@@ -43,6 +52,15 @@
 - **Avisos de sucesso** - Feedback visual após downloads
 - **Performance otimizada** - Downloads mais estáveis e rápidos
 - **Manutenibilidade** - Código limpo e bem documentado
+
+### ✨ Novidades da Versão 2.1.4
+- **📊 Exportação de dados implementada** - Exporte histórico em CSV e PDF
+- **🔍 Filtros na exportação** - Aplica filtros ativos (busca, resolução, status, período)
+- **📑 Relatórios profissionais** - PDFs formatados em A4 com cabeçalho e rodapé
+- **📄 Compatibilidade CSV** - Arquivos compatíveis com Excel e Google Sheets
+- **💾 Seleção de destino** - Escolha onde salvar os arquivos exportados
+- **📅 Informações contextuais** - Data de geração e filtros aplicados incluídos
+- **⚡ Performance otimizada** - Exportação eficiente de grandes volumes de dados
 
 ### ✨ Novidades da Versão 2.1.3
 - **🎵 Download de playlists implementado** - Suporte completo a playlists do YouTube
@@ -133,6 +151,22 @@ python yt.py
    - **📚 Histórico automático** de cada vídeo baixado
 8. **Aguarde a conclusão** de todos os vídeos da playlist
 
+#### 📊 Exportação de Dados
+1. **Acesse a aba Histórico** onde estão listados seus downloads
+2. **Aplique filtros** (opcional) para exportar apenas dados específicos:
+   - **🔍 Busca por texto** - Digite título ou URL
+   - **📺 Resolução** - Selecione qualidade específica
+   - **📊 Status** - Filtre por Concluído, Erro, etc.
+   - **📅 Período** - Escolha intervalo de datas
+3. **Clique no botão de exportação** desejado:
+   - **📊 Exportar CSV** - Para planilhas (Excel, Google Sheets)
+   - **📑 Exportar PDF** - Para relatórios profissionais
+4. **Escolha o local** onde salvar o arquivo
+5. **Aguarde a confirmação** de exportação bem-sucedida
+6. **Abra o arquivo** gerado para visualizar seus dados
+
+**💡 Dica**: Os filtros aplicados na interface são automaticamente incluídos na exportação, permitindo relatórios personalizados.
+
 ## 📁 Estrutura do Projeto
 
 ### 🏗️ Arquitetura Modular (v2.1)
@@ -180,7 +214,8 @@ python yt.py
         ├── MINI_PLAYER_FEATURE.md     # 🎬 Mini-player de preview
         ├── MINI_PLAYER_FIXES.md       # 🔧 Correções do mini-player
         ├── CRITICAL_FIXES_ANALYSIS.md # 🚨 Análise de correções críticas
-        └── VIDEO_INFO_WIDGET_IMPROVEMENTS.md # 📺 Melhorias do widget de informações
+        ├── VIDEO_INFO_WIDGET_IMPROVEMENTS.md # 📺 Melhorias do widget de informações
+        └── EXPORT_FEATURE.md          # 📊 Funcionalidade de exportação de dados
 ```
 
 ### 🎯 Benefícios da Nova Arquitetura
@@ -230,7 +265,7 @@ Para debug avançado, consulte:
 
 ## 📊 Estatísticas de Performance
 
-| Métrica | Versão Original | Versão 2.1.3 Refatorada |
+| Métrica | Versão Original | Versão 2.1.4 Refatorada |
 |---------|-----------------|-------------------------|
 | **Linhas de Código** | 1.842 (monólito) | 7 módulos especializados |
 | **Manutenibilidade** | ⭐⭐ | ⭐⭐⭐⭐⭐ |
@@ -242,6 +277,7 @@ Para debug avançado, consulte:
 | **Suporte a Playlists** | ❌ Não disponível | **✅ Completo com progresso** |
 | **Mini-player** | ❌ Básico | **✅ Thumbnails e metadados** |
 | **Histórico** | ⚠️ Limitado | **✅ Automático para playlists** |
+| **Exportação de Dados** | ❌ Não disponível | **✅ CSV e PDF com filtros** |
 | **Experiência do Usuário** | ⭐⭐⭐ | **⭐⭐⭐⭐⭐** |
 
 ## 🤝 Contribuição
@@ -269,14 +305,15 @@ Este projeto está licenciado sob a **Licença MIT** - veja o arquivo [LICENSE](
 
 ## 👨‍💻 Desenvolvimento
 
-### 🏗️ Versão 2.1.3 - Playlists e Correções Críticas
+### 🏗️ Versão 2.1.4 - Exportação de Dados
 - **Arquitetura**: Transformação de monólito em módulos especializados
 - **Qualidade**: Código limpo, documentado e testado
 - **Performance**: Otimizações significativas de estabilidade
-- **Funcionalidades**: 100% mantidas + download de playlists
-- **Playlists**: Suporte completo com progresso individual e histórico
-- **Correções**: Mini-player, histórico e widget de informações
-- **Experiência do Usuário**: Interface moderna e intuitiva
+- **Funcionalidades**: 100% mantidas + playlists + exportação de dados
+- **Exportação**: CSV e PDF com filtros avançados aplicados
+- **Relatórios**: Formato profissional A4 com informações contextuais
+- **Integração**: Compatibilidade com Excel, Google Sheets e sistemas externos
+- **Experiência do Usuário**: Interface moderna e intuitiva com análise de dados
 
 ### 📈 Roadmap Futuro
 - 🌐 **Interface web** opcional
@@ -287,4 +324,4 @@ Este projeto está licenciado sob a **Licença MIT** - veja o arquivo [LICENSE](
 
 ---
 
-**Desenvolvido com ❤️ e Python** | **Versão 2.1.3 - Playlists e Correções** | **2024**
+**Desenvolvido com ❤️ e Python** | **Versão 2.1.4 - Exportação de Dados** | **2024**

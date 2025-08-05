@@ -80,8 +80,7 @@ def main():
     if not setup_environment():
         return False
     
-    print("\n\033[92m=== Instalação concluída com sucesso! ===")
-    print("Você pode agora executar o programa usando: python yt.py\033[0m")
+    print("\n\033[92m=== Instalação concluída com sucesso! ===\nVocê pode agora executar o programa usando: python yt_refactored.py\033[0m")
     return True
 
 if __name__ == '__main__':
