@@ -158,8 +158,11 @@ class DownloadTab:
     def create_widgets(self):
         """Cria widgets da aba de download"""
         # URL input
-        self.url_label = tk.Label(self.frame, text="URL do vídeo:")
+        self.url_label = tk.Label(self.frame, text="URL do vídeo/playlist:")
         self.url_entry = tk.Entry(self.frame, width=50)
+        
+        # Indicador de tipo de conteúdo
+        self.content_type_label = tk.Label(self.frame, text="", fg="blue", font=("Arial", 9, "italic"))
         
         # Menu de contexto para URL
         self.create_context_menu()
@@ -169,6 +172,22 @@ class DownloadTab:
             self.frame, 
             text="Extrair informações", 
             command=self.extract_info
+        )
+        
+        # Opção de download de playlist
+        self.playlist_frame = tk.Frame(self.frame)
+        self.is_playlist_var = tk.BooleanVar()
+        self.playlist_checkbox = tk.Checkbutton(
+            self.playlist_frame,
+            text="Baixar playlist completa",
+            variable=self.is_playlist_var,
+            command=self.on_playlist_mode_change
+        )
+        self.playlist_info_label = tk.Label(
+            self.playlist_frame, 
+            text="", 
+            fg="green", 
+            font=("Arial", 9)
         )
         
         # Frame para resoluções
@@ -366,9 +385,9 @@ class DownloadTab:
         self.thumbnail_frame.configure(width=160, height=100)
         self.thumbnail_frame.pack_propagate(False)
         
-        # Posicionar mini-player na row=4 (separado da barra de progresso)
+        # Posicionar mini-player na row=6 (separado dos frames principais)
         self.mini_player_frame.grid(
-            row=4, 
+            row=6, 
             column=0, 
             columnspan=2, 
             sticky='ew', 
@@ -617,9 +636,9 @@ class DownloadTab:
         """Configura layout da aba"""
         # Configurar grid (reorganizado para evitar conflitos)
         for i in range(12):  # Aumentado para acomodar todos os elementos
-            if i == 2:  # Linha dos frames principais
+            if i == 4:  # Linha dos frames principais (resoluções e metadados)
                 self.frame.rowconfigure(i, weight=1, pad=UIConstants.PADDING)
-            elif i == 4:  # Linha do mini-player - altura mínima garantida
+            elif i == 6:  # Linha do mini-player - altura mínima garantida
                 self.frame.rowconfigure(i, minsize=130, pad=UIConstants.PADDING)
             else:
                 self.frame.rowconfigure(i, pad=UIConstants.PADDING)
@@ -631,11 +650,19 @@ class DownloadTab:
         self.url_label.grid(row=0, column=0, sticky='w')
         self.url_entry.grid(row=0, column=1, sticky='ew')
         
-        self.extract_button.grid(row=1, column=0, columnspan=2, pady=UIConstants.BUTTON_PADDING)
+        # Indicador de tipo de conteúdo
+        self.content_type_label.grid(row=1, column=0, columnspan=2, sticky='w', pady=2)
+        
+        self.extract_button.grid(row=2, column=0, columnspan=2, pady=2)
+        
+        # Opções de playlist
+        self.playlist_frame.grid(row=3, column=0, columnspan=2, sticky='ew', pady=2)
+        self.playlist_checkbox.pack(side='left')
+        self.playlist_info_label.pack(side='left', padx=(10, 0))
         
         # Frames principais
-        self.resolutions_frame.grid(row=2, column=0, sticky='nsew', padx=(0, 5))
-        self.metadata_frame.grid(row=2, column=1, sticky='nsew', padx=(5, 0))
+        self.resolutions_frame.grid(row=4, column=0, sticky='nsew', padx=(0, 5))
+        self.metadata_frame.grid(row=4, column=1, sticky='nsew', padx=(5, 0))
         
         # Layout do frame de resoluções
         self.resolutions_label.pack()
@@ -655,15 +682,15 @@ class DownloadTab:
         self.metadata_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.metadata_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        self.download_button.grid(row=3, column=0, columnspan=2, pady=UIConstants.BUTTON_PADDING)
+        self.download_button.grid(row=5, column=0, columnspan=2, pady=UIConstants.BUTTON_PADDING)
         
-        # Mini-player (row=4) - será posicionado dinamicamente
-        # Progress frame (row=5) - será posicionado dinamicamente
+        # Mini-player (row=6) - será posicionado dinamicamente
+        # Progress frame (row=7) - será posicionado dinamicamente
         
-        self.directory_button.grid(row=7, column=0, columnspan=2, pady=UIConstants.BUTTON_PADDING)
-        self.directory_label.grid(row=8, column=0, columnspan=2, sticky='ew', padx=UIConstants.PADDING)
+        self.directory_button.grid(row=8, column=0, columnspan=2, pady=UIConstants.BUTTON_PADDING)
+        self.directory_label.grid(row=9, column=0, columnspan=2, sticky='ew', padx=UIConstants.PADDING)
         
-        self.exit_button.grid(row=9, column=0, columnspan=2, pady=UIConstants.PADDING)
+        self.exit_button.grid(row=10, column=0, columnspan=2, pady=UIConstants.PADDING)
     
     def show_context_menu(self, event):
         """Mostra menu de contexto"""
@@ -713,25 +740,56 @@ class DownloadTab:
         self.extract_button.config(state=tk.NORMAL, text="Extrair informações")
         
         if success:
-            self.log_manager.log_info(f"Dados extraídos: Título = {data.get('title', 'N/A')[:50]}...")
-            self.log_manager.log_info(f"Resoluções recebidas: {len(resolutions)} itens - {resolutions}")
+            # Verificar se é playlist ou vídeo individual
+            is_playlist = data and data.get('type') == 'playlist'
             
-            # Atualizar interface com dados extraídos
-            self.update_resolutions(resolutions)
-            self.update_metadata(data)
+            if is_playlist:
+                self.log_manager.log_info(f"Playlist detectada: {data.get('title', 'N/A')[:50]}... ({data.get('video_count', 0)} vídeos)")
+                
+                # Atualizar indicador de tipo de conteúdo
+                self.content_type_label.config(text=f"📋 Playlist detectada ({data.get('video_count', 0)} vídeos)")
+                
+                # Mostrar checkbox de playlist e marcar como habilitado
+                self.playlist_checkbox.config(state=tk.NORMAL)
+                self.is_playlist_var.set(True)
+                self.on_playlist_mode_change()
+                
+                # Para playlists, não há resoluções específicas - usar padrões
+                self.update_resolutions(['1080p', '720p', '480p', '360p'])
+                self.update_metadata(data)
+                
+            else:
+                self.log_manager.log_info(f"Vídeo individual: {data.get('title', 'N/A')[:50]}...")
+                self.log_manager.log_info(f"Resoluções recebidas: {len(resolutions)} itens - {resolutions}")
+                
+                # Atualizar indicador de tipo de conteúdo
+                self.content_type_label.config(text="🎥 Vídeo individual")
+                
+                # Desmarcar playlist e desabilitar checkbox
+                self.is_playlist_var.set(False)
+                self.playlist_checkbox.config(state=tk.DISABLED)
+                self.on_playlist_mode_change()
+                
+                # Atualizar interface com dados extraídos
+                self.update_resolutions(resolutions)
+                self.update_metadata(data)
+                
+                # Ocultar mini-player anterior e mostrar novo se dados válidos
+                self.hide_mini_player()
+                if data and isinstance(data, dict):
+                    self.update_mini_player(data)
+            
             self.enable_download_if_ready()
-            
-            # Ocultar mini-player anterior e mostrar novo se dados válidos
-            self.hide_mini_player()
-            if data and isinstance(data, dict):
-                self.update_mini_player(data)
-            
             self.log_manager.log_info("Interface atualizada com sucesso após extração")
         else:
             self.log_manager.log_error(f"Erro na extração: {data}", "Extração de Informações")
             AppUtils.show_error_message("Erro", data)
             
             # Limpar interface em caso de erro
+            self.content_type_label.config(text="")
+            self.is_playlist_var.set(False)
+            self.playlist_checkbox.config(state=tk.DISABLED)
+            self.playlist_info_label.config(text="")
             self.hide_mini_player()
             self.resolutions_listbox.delete(0, tk.END)
             self.metadata_text.delete("1.0", tk.END)
@@ -860,6 +918,137 @@ class DownloadTab:
         
         self.enable_download_if_ready()
     
+    def on_playlist_mode_change(self):
+        """Callback quando modo playlist muda"""
+        if self.is_playlist_var.get():
+            # Verificar se há informações de playlist disponíveis
+            if (hasattr(self.download_manager, 'current_info') and 
+                self.download_manager.current_info and 
+                self.download_manager.current_info.get('type') == 'playlist'):
+                
+                video_count = self.download_manager.current_info.get('video_count', 0)
+                self.playlist_info_label.config(text=f"({video_count} vídeos)")
+                self.download_button.config(text="Baixar Playlist")
+            else:
+                self.playlist_info_label.config(text="(Extraia informações primeiro)")
+                self.download_button.config(text="Baixar Playlist")
+        else:
+            self.playlist_info_label.config(text="")
+            if self.audio_only_var.get():
+                self.download_button.config(text="Baixar áudio")
+            else:
+                self.download_button.config(text="Baixar vídeo")
+        
+        self.enable_download_if_ready()
+    
+    def on_playlist_video_processed(self, data, callback_type='progress'):
+        """
+        Callback chamado quando um vídeo da playlist é processado
+        
+        Args:
+            data: Dados do vídeo (entry para progresso, video_success_data para sucesso)
+            callback_type: Tipo do callback ('progress' ou 'success')
+        """
+        try:
+            if callback_type == 'progress':
+                # Callback de progresso - quando vídeo está sendo processado
+                video_entry, index, total = data
+                
+                def update_progress_ui():
+                    try:
+                        # Atualizar texto do botão com progresso
+                        progress_text = f"Baixando vídeo {index}/{total}: {video_entry.get('title', 'N/A')[:30]}..."
+                        self.download_button.config(text=progress_text)
+                        
+                        # Log do progresso
+                        self.log_manager.log_info(f"Processando vídeo {index}/{total} da playlist: {video_entry.get('title', 'N/A')}")
+                        
+                    except Exception as e:
+                        self.log_manager.log_error(f"Erro ao atualizar UI para vídeo da playlist: {str(e)}")
+                
+                # Executar atualização na thread principal
+                self.frame.after(0, update_progress_ui)
+                
+            elif callback_type == 'success':
+                # Callback de sucesso - quando vídeo foi baixado com sucesso
+                video_success_data = data
+                
+                def update_success_ui():
+                    try:
+                        video_info = video_success_data['video_info']
+                        index = video_success_data['index']
+                        total = video_success_data['total']
+                        resolution = video_success_data['resolution']
+                        audio_only = video_success_data['audio_only']
+                        
+                        # Atualizar mini-player com informações do vídeo atual
+                        self.update_mini_player(video_info)
+                        
+                        # Salvar no histórico
+                        self.add_video_to_history(video_info, resolution, audio_only)
+                        
+                        # Log de sucesso
+                        self.log_manager.log_info(f"Vídeo {index}/{total} salvo no histórico: {video_info.get('title', 'N/A')}")
+                        
+                    except Exception as e:
+                        self.log_manager.log_error(f"Erro ao processar sucesso do vídeo da playlist: {str(e)}")
+                
+                # Executar atualização na thread principal
+                self.frame.after(0, update_success_ui)
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro no callback de vídeo da playlist: {str(e)}")
+    
+    def add_video_to_history(self, video_info, resolution, audio_only):
+        """
+        Adiciona um vídeo específico da playlist ao histórico
+        
+        Args:
+            video_info: Informações do vídeo
+            resolution: Resolução selecionada
+            audio_only: Se é download apenas de áudio
+        """
+        try:
+            # Coletar metadados do vídeo
+            title = video_info.get('title', 'N/A')
+            duration = video_info.get('duration', 0)
+            uploader = video_info.get('uploader', 'N/A')
+            upload_date = video_info.get('upload_date', 'N/A')
+            view_count = video_info.get('view_count', 0)
+            like_count = video_info.get('like_count', 0)
+            description = video_info.get('description', 'N/A')
+            url = video_info.get('webpage_url', video_info.get('url', 'N/A'))
+            
+            # Determinar resolução para histórico
+            if audio_only:
+                resolution_for_history = 'music'
+            else:
+                resolution_for_history = resolution
+            
+            # Calcular tamanho estimado
+            estimated_size = 0
+            if 'filesize' in video_info and video_info['filesize']:
+                estimated_size = video_info['filesize']
+            elif 'filesize_approx' in video_info and video_info['filesize_approx']:
+                estimated_size = video_info['filesize_approx']
+            
+            # Adicionar ao histórico
+            self.history_manager.add_download_to_history(
+                title=title,
+                url=url,
+                resolution=resolution_for_history,
+                file_size=estimated_size,
+                duration=duration,
+                uploader=uploader,
+                upload_date=upload_date,
+                view_count=view_count,
+                like_count=like_count,
+                description=description
+            )
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao adicionar vídeo da playlist ao histórico: {str(e)}")
+    
     def select_directory(self):
         """Seleciona diretório de download"""
         directory = filedialog.askdirectory()
@@ -883,13 +1072,23 @@ class DownloadTab:
         has_directory = bool(self.download_manager.download_directory)
         has_info = self.download_manager.get_download_status()['has_info']
         
-        # Verificar se tem resolução selecionada OU se é download apenas de áudio
-        if self.audio_only_var.get():
-            has_format = True  # Para áudio, não precisa de resolução específica
-            button_text = "Baixar áudio"
+        # Determinar texto do botão e verificar formato baseado no modo
+        if self.is_playlist_var.get():
+            # Modo playlist
+            if self.audio_only_var.get():
+                has_format = True  # Para áudio, não precisa de resolução específica
+                button_text = "Baixar Playlist (áudio)"
+            else:
+                has_format = bool(self.resolutions_listbox.curselection())
+                button_text = "Baixar Playlist (vídeo)"
         else:
-            has_format = bool(self.resolutions_listbox.curselection())
-            button_text = "Baixar vídeo"
+            # Modo individual
+            if self.audio_only_var.get():
+                has_format = True  # Para áudio, não precisa de resolução específica
+                button_text = "Baixar áudio"
+            else:
+                has_format = bool(self.resolutions_listbox.curselection())
+                button_text = "Baixar vídeo"
         
         if has_format and has_directory and has_info:
             self.download_button.config(state=tk.NORMAL, text=button_text)
@@ -900,35 +1099,68 @@ class DownloadTab:
         """Inicia o download"""
         url = self.url_entry.get().strip()
         
-        # Verificar se é download de áudio ou vídeo
-        if self.audio_only_var.get():
-            # Download apenas de áudio
-            audio_quality = self.audio_quality_var.get()
-            selected_resolution = None
-            download_type = "áudio"
+        # Verificar se é download de playlist
+        if self.is_playlist_var.get():
+            # Download de playlist
+            if self.audio_only_var.get():
+                audio_quality = self.audio_quality_var.get()
+                selected_resolution = None
+                download_type = "playlist (áudio)"
+            else:
+                selected_index = self.resolutions_listbox.curselection()
+                if not selected_index:
+                    AppUtils.show_error_message("Erro", "Por favor, selecione uma resolução.")
+                    return
+                selected_resolution = self.resolutions_listbox.get(selected_index)
+                audio_quality = None
+                download_type = "playlist (vídeo)"
+            
+            # Preparar interface para download de playlist
+            self.download_button.config(state=tk.DISABLED, text=f"Baixando {download_type}...")
+            self.show_progress_bar()
+            
+            # Iniciar download de playlist
+            success, message = self.download_manager.start_playlist_download(
+                url,
+                selected_resolution,
+                success_callback=self.on_download_success,
+                error_callback=self.on_download_error,
+                audio_only=self.audio_only_var.get(),
+                audio_quality=audio_quality,
+                video_callback=self.on_playlist_video_processed
+            )
+            
         else:
-            # Download de vídeo
-            selected_index = self.resolutions_listbox.curselection()
-            if not selected_index:
-                AppUtils.show_error_message("Erro", "Por favor, selecione uma resolução.")
-                return
-            selected_resolution = self.resolutions_listbox.get(selected_index)
-            audio_quality = None
-            download_type = "vídeo"
-        
-        # Preparar interface para download
-        self.download_button.config(state=tk.DISABLED, text=f"Baixando {download_type}...")
-        self.show_progress_bar()
-        
-        # Iniciar download
-        success, message = self.download_manager.start_download(
-            url, 
-            selected_resolution,
-            success_callback=self.on_download_success,
-            error_callback=self.on_download_error,
-            audio_only=self.audio_only_var.get(),
-            audio_quality=audio_quality
-        )
+            # Download individual
+            # Verificar se é download de áudio ou vídeo
+            if self.audio_only_var.get():
+                # Download apenas de áudio
+                audio_quality = self.audio_quality_var.get()
+                selected_resolution = None
+                download_type = "áudio"
+            else:
+                # Download de vídeo
+                selected_index = self.resolutions_listbox.curselection()
+                if not selected_index:
+                    AppUtils.show_error_message("Erro", "Por favor, selecione uma resolução.")
+                    return
+                selected_resolution = self.resolutions_listbox.get(selected_index)
+                audio_quality = None
+                download_type = "vídeo"
+            
+            # Preparar interface para download
+            self.download_button.config(state=tk.DISABLED, text=f"Baixando {download_type}...")
+            self.show_progress_bar()
+            
+            # Iniciar download
+            success, message = self.download_manager.start_download(
+                url, 
+                selected_resolution,
+                success_callback=self.on_download_success,
+                error_callback=self.on_download_error,
+                audio_only=self.audio_only_var.get(),
+                audio_quality=audio_quality
+            )
         
         if not success:
             AppUtils.show_error_message("Erro", message)
@@ -941,8 +1173,8 @@ class DownloadTab:
             self.progress_bar.pack(fill=tk.X, pady=2)
             self.progress_label.pack()
         
-        # Posicionar o frame no grid (row=5 para evitar conflito com mini-player)
-        self.progress_frame.grid(row=5, column=0, columnspan=2, sticky='ew', padx=UIConstants.PADDING, pady=UIConstants.BUTTON_PADDING)
+        # Posicionar o frame no grid (row=7 para evitar conflito com mini-player)
+        self.progress_frame.grid(row=7, column=0, columnspan=2, sticky='ew', padx=UIConstants.PADDING, pady=UIConstants.BUTTON_PADDING)
         self.progress_bar['value'] = 0
         self.progress_label.config(text="Preparando download...")
         
