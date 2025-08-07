@@ -6,7 +6,7 @@ from datetime import datetime
 class DatabaseSchema:
     def __init__(self, db_path="youtube_downloader.db"):
         self.db_path = db_path
-        self.current_version = 3  # Versão atual do schema
+        self.current_version = 4  # Versão atual do schema
         
     def get_db_version(self):
         """Obtém a versão atual do banco de dados"""
@@ -133,6 +133,26 @@ class DatabaseSchema:
         ]
         self.apply_migration(3, "Adição de índices e campos de erro", commands)
     
+    def migrate_to_version_4(self):
+        """Migração v4: Campos para análise de velocidade de download"""
+        commands = [
+            """
+            ALTER TABLE downloads ADD COLUMN download_speed_mbps REAL DEFAULT NULL
+            """,
+            """
+            ALTER TABLE downloads ADD COLUMN download_duration_seconds INTEGER DEFAULT NULL
+            """,
+            """
+            ALTER TABLE downloads ADD COLUMN peak_speed_mbps REAL DEFAULT NULL
+            """,
+            """
+            ALTER TABLE downloads ADD COLUMN avg_speed_mbps REAL DEFAULT NULL
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_downloads_speed ON downloads(download_speed_mbps)",
+            "CREATE INDEX IF NOT EXISTS idx_downloads_duration ON downloads(download_duration_seconds)"
+        ]
+        self.apply_migration(4, "Adição de campos para análise de velocidade", commands)
+    
     def initialize_database(self):
         """Inicializa e atualiza o banco de dados automaticamente"""
         logging.info("Iniciando verificação do schema do banco de dados...")
@@ -154,6 +174,9 @@ class DatabaseSchema:
         
         if current_db_version < 3:
             self.migrate_to_version_3()
+        
+        if current_db_version < 4:
+            self.migrate_to_version_4()
         
         if current_db_version < self.current_version:
             logging.info(f"Banco de dados atualizado para v{self.current_version}")

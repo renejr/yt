@@ -19,6 +19,7 @@ from matplotlib.figure import Figure
 import numpy as np
 from utils import AppUtils, UIConstants, AppConstants
 from analytics_manager import AnalyticsManager, RecommendationEngine
+from bandwidth_tracker import BandwidthTracker
 
 class MainApplication:
     """Aplicação principal com interface gráfica"""
@@ -37,6 +38,12 @@ class MainApplication:
         self.config_manager = config_manager
         self.history_manager = history_manager
         self.log_manager = log_manager
+        
+        # Inicializar rastreamento de velocidade
+        self.bandwidth_tracker = BandwidthTracker(history_manager.db_manager)
+        self.current_download_id = None
+        self.current_db_download_id = None
+        self._pending_finish_tracking = None
         
         # Configurar callbacks do download_manager
         self.download_manager.progress_callback = self.progress_hook
@@ -129,6 +136,41 @@ class MainApplication:
     
     def progress_hook(self, d):
         """Hook para progresso do download"""
+        # Rastrear velocidade de download
+        if d['status'] == 'downloading':
+            try:
+                # Extrair dados de velocidade
+                downloaded_bytes = d.get('downloaded_bytes', 0)
+                total_bytes = d.get('total_bytes') or d.get('total_bytes_estimate', 0)
+
+                # Determinar a melhor representação de velocidade disponível
+                speed_input = d.get('_speed_str')
+                if not speed_input or speed_input == 'N/A':
+                    # Caso a string não exista ou seja "N/A", tentar usar o valor numérico em bytes/s
+                    speed_input = d.get('speed', 'N/A')
+                
+                # Atualizar rastreamento de velocidade
+                if self.bandwidth_tracker and self.current_download_id:
+                    self.bandwidth_tracker.update_speed(
+                        self.current_download_id,
+                        speed_input,
+                        downloaded_bytes,
+                        total_bytes
+                    )
+            except Exception as e:
+                self.log_manager.log_error(f"Erro no rastreamento de velocidade: {e}")
+        
+        elif d['status'] == 'finished':
+            # Finalizar rastreamento quando download terminar
+            if self.bandwidth_tracker and self.current_download_id:
+                try:
+                    # Armazenar o ID do download para uso posterior
+                    self._pending_finish_tracking = self.current_download_id
+                    self.log_manager.log_info(f"Download finalizado, aguardando DB ID para: {self.current_download_id}")
+                except Exception as e:
+                    self.log_manager.log_error(f"Erro ao preparar finalização do rastreamento: {e}")
+        
+        # Atualizar interface
         if hasattr(self.download_frame, 'update_progress'):
             self.root.after(0, lambda: self.download_frame.update_progress(d))
     
@@ -1141,6 +1183,17 @@ class DownloadTab:
             self.download_button.config(state=tk.DISABLED, text=f"Baixando {download_type}...")
             self.show_progress_bar()
             
+            # Inicializar rastreamento de velocidade
+            if hasattr(self.main_app, 'bandwidth_tracker'):
+                try:
+                    import uuid
+                    download_id = str(uuid.uuid4())
+                    self.main_app.current_download_id = download_id
+                    self.main_app.bandwidth_tracker.start_tracking(download_id)
+                    self.log_manager.log_info(f"Rastreamento iniciado (playlist) com ID: {download_id}")
+                except Exception as e:
+                    self.log_manager.log_error(f"Erro ao inicializar rastreamento (playlist): {e}")
+            
             # Iniciar download de playlist
             success, message = self.download_manager.start_playlist_download(
                 url,
@@ -1173,6 +1226,21 @@ class DownloadTab:
             # Preparar interface para download
             self.download_button.config(state=tk.DISABLED, text=f"Baixando {download_type}...")
             self.show_progress_bar()
+            
+            # Inicializar rastreamento de velocidade
+            if hasattr(self.main_app, 'bandwidth_tracker'):
+                try:
+                    # Gerar ID único para este download
+                    import uuid
+                    download_id = str(uuid.uuid4())
+                    self.main_app.current_download_id = download_id
+                    
+                    # Iniciar rastreamento
+                    self.main_app.bandwidth_tracker.start_tracking(download_id)
+                    
+                    self.log_manager.log_info(f"Rastreamento iniciado com ID: {download_id}")
+                except Exception as e:
+                    self.log_manager.log_error(f"Erro ao inicializar rastreamento: {e}")
             
             # Iniciar download
             success, message = self.download_manager.start_download(
@@ -1265,8 +1333,28 @@ class DownloadTab:
         self.progress_bar['value'] = 100
         self.progress_label.config(text="Download concluído!")
         
-        # Adicionar ao histórico
-        self.add_to_history()
+        # Adicionar ao histórico e obter o ID do download
+        download_id = self.add_to_history()
+        
+        # Definir o current_db_download_id e finalizar rastreamento
+        if download_id:
+            self.current_db_download_id = download_id
+            self.log_manager.log_info(f"Download ID definido: {download_id}")
+            
+            # Finalizar rastreamento de velocidade se houver um pendente
+            if (hasattr(self.main_app, 'bandwidth_tracker') and 
+                hasattr(self.main_app, '_pending_finish_tracking') and 
+                self.main_app._pending_finish_tracking):
+                try:
+                    self.main_app.bandwidth_tracker.finish_tracking(
+                        self.main_app._pending_finish_tracking,
+                        download_id
+                    )
+                    self.log_manager.log_info(f"Rastreamento finalizado: {self.main_app._pending_finish_tracking} -> DB ID: {download_id}")
+                    # Limpar o ID pendente
+                    self.main_app._pending_finish_tracking = None
+                except Exception as e:
+                    self.log_manager.log_error(f"Erro ao finalizar rastreamento: {e}")
         
         # Auto-abrir pasta se configurado
         if self.config_manager.should_auto_open_folder():
@@ -1288,7 +1376,7 @@ class DownloadTab:
         self.reset_download_ui()
     
     def add_to_history(self):
-        """Adiciona download ao histórico"""
+        """Adiciona download ao histórico e retorna o ID do download"""
         try:
             metadata = self.download_manager.get_video_metadata()
             
@@ -1348,10 +1436,18 @@ class DownloadTab:
                 f"Thumbnail: {'Sim' if thumbnail_url else 'Não'}"
             )
             
-            self.history_manager.add_download_to_history(download_data)
+            # Adicionar ao histórico e obter o ID
+            success, download_id = self.history_manager.add_download_to_history(download_data)
+            
+            if success:
+                return download_id
+            else:
+                self.log_manager.log_error(download_id, "Erro ao adicionar ao histórico")
+                return None
             
         except Exception as e:
             self.log_manager.log_error(e, "Erro ao adicionar ao histórico")
+            return None
     
     def reset_download_ui(self):
         """Reseta interface após download"""
@@ -2295,6 +2391,7 @@ class AnalyticsTab:
         self.create_trend_chart()
         self.create_hourly_chart()
         self.create_storage_chart()
+        self.create_bandwidth_chart()
     
     def create_resolution_chart(self):
         """Cria gráfico de distribuição por resolução"""
@@ -2332,6 +2429,24 @@ class AnalyticsTab:
         self.storage_fig = Figure(figsize=(8, 6), dpi=100)
         self.storage_canvas = FigureCanvasTkAgg(self.storage_fig, self.storage_frame)
         self.storage_canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def create_bandwidth_chart(self):
+        """Cria gráfico de análise de uso de banda"""
+        self.bandwidth_frame = ttk.Frame(self.charts_notebook)
+        self.charts_notebook.add(self.bandwidth_frame, text="Uso de Banda")
+        
+        self.bandwidth_fig = Figure(figsize=(8, 6), dpi=100)
+        self.bandwidth_canvas = FigureCanvasTkAgg(self.bandwidth_fig, self.bandwidth_frame)
+        self.bandwidth_canvas.get_tk_widget().pack(fill='both', expand=True)
+    
+    def create_bandwidth_chart(self):
+        """Cria gráfico de análise de uso de banda"""
+        self.bandwidth_frame = ttk.Frame(self.charts_notebook)
+        self.charts_notebook.add(self.bandwidth_frame, text="Uso de Banda")
+        
+        self.bandwidth_fig = Figure(figsize=(8, 6), dpi=100)
+        self.bandwidth_canvas = FigureCanvasTkAgg(self.bandwidth_fig, self.bandwidth_frame)
+        self.bandwidth_canvas.get_tk_widget().pack(fill='both', expand=True)
     
     def create_reports_tab(self):
         """Cria a aba de relatórios"""
@@ -2527,6 +2642,9 @@ class AnalyticsTab:
             # Atualizar gráfico de armazenamento
             self.update_storage_chart()
             
+            # Atualizar gráfico de uso de banda
+            self.update_bandwidth_chart(period_days)
+            
         except Exception as e:
             self.log_manager.log_error(f"Erro ao atualizar gráficos: {e}")
     
@@ -2696,6 +2814,91 @@ class AnalyticsTab:
             
         except Exception as e:
             self.log_manager.log_error(f"Erro ao atualizar gráfico de armazenamento: {e}")
+    
+    def update_bandwidth_chart(self, period_days):
+        """Atualiza o gráfico de uso de banda"""
+        try:
+            self.bandwidth_fig.clear()
+            ax = self.bandwidth_fig.add_subplot(111)
+            
+            # Obter dados de velocidade do banco de dados
+            from datetime import datetime, timedelta
+            end_date = datetime.now()
+            start_date = end_date - timedelta(days=period_days)
+            
+            # Consultar dados de velocidade do banco de dados
+            import sqlite3
+            conn = sqlite3.connect(self.history_manager.db_manager.db_path)
+            cursor = conn.cursor()
+            
+            query = """
+                SELECT DATE(download_date) as date, 
+                       AVG(avg_speed_mbps) as avg_speed,
+                       MAX(peak_speed_mbps) as max_speed,
+                       MIN(avg_speed_mbps) as min_speed
+                FROM downloads 
+                WHERE download_date >= ? AND download_date <= ?
+                  AND avg_speed_mbps IS NOT NULL
+                GROUP BY DATE(download_date)
+                ORDER BY date
+            """
+            
+            cursor.execute(query, (start_date.strftime('%Y-%m-%d'), end_date.strftime('%Y-%m-%d')))
+            results = cursor.fetchall()
+            conn.close()
+            
+            if results:
+                dates = []
+                avg_speeds = []
+                max_speeds = []
+                min_speeds = []
+                
+                for row in results:
+                    dates.append(datetime.strptime(row[0], '%Y-%m-%d'))
+                    avg_speeds.append(row[1] if row[1] else 0)
+                    max_speeds.append(row[2] if row[2] else 0)
+                    min_speeds.append(row[3] if row[3] else 0)
+                
+                # Plotar gráfico de linha
+                ax.plot(dates, avg_speeds, label='Velocidade Média', color='#4CAF50', linewidth=2)
+                ax.plot(dates, max_speeds, label='Velocidade Máxima', color='#FF9800', linewidth=1, alpha=0.7)
+                ax.fill_between(dates, min_speeds, max_speeds, alpha=0.2, color='#2196F3')
+                
+                ax.set_title('Análise de Velocidade de Download', fontsize=12, color='white')
+                ax.set_xlabel('Data', color='white')
+                ax.set_ylabel('Velocidade (Mbps)', color='white')
+                ax.legend()
+                
+                # Formatar datas no eixo x
+                import matplotlib.dates as mdates
+                ax.xaxis.set_major_formatter(mdates.DateFormatter('%d/%m'))
+                ax.xaxis.set_major_locator(mdates.DayLocator(interval=max(1, period_days // 10)))
+                plt.setp(ax.xaxis.get_majorticklabels(), rotation=45)
+                
+                # Configurar cores
+                ax.tick_params(colors='white')
+                ax.spines['bottom'].set_color('white')
+                ax.spines['top'].set_color('white')
+                ax.spines['right'].set_color('white')
+                ax.spines['left'].set_color('white')
+                
+                # Configurar legenda
+                legend = ax.legend()
+                legend.get_frame().set_facecolor('#2e2e2e')
+                for text in legend.get_texts():
+                    text.set_color('white')
+            else:
+                ax.text(0.5, 0.5, 'Sem dados de velocidade disponíveis', 
+                       horizontalalignment='center', verticalalignment='center',
+                       transform=ax.transAxes, fontsize=12, color='white')
+            
+            self.bandwidth_fig.patch.set_facecolor('#2e2e2e')
+            ax.set_facecolor('#2e2e2e')
+            self.bandwidth_fig.tight_layout()
+            self.bandwidth_canvas.draw()
+            
+        except Exception as e:
+            self.log_manager.log_error(f"Erro ao atualizar gráfico de banda: {e}")
     
     def update_recommendations(self):
         """Atualiza as recomendações"""

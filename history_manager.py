@@ -1,5 +1,4 @@
 import os
-import subprocess
 from datetime import datetime, timedelta
 from database_manager import DatabaseManager
 from utils import AppUtils, AppConstants
@@ -17,6 +16,51 @@ class HistoryManager:
         """
         self.db_manager = db_manager or DatabaseManager()
         self.log_manager = log_manager
+        
+        # Estrutura padrão de paginação
+        self.DEFAULT_PAGINATION = {
+            'current_page': 1,
+            'per_page': 50,
+            'total_pages': 0,
+            'total_items': 0,
+            'has_next': False,
+            'has_previous': False
+        }
+    
+    def _handle_exception(self, exception, operation_name, default_return=None):
+        """
+        Método auxiliar para tratamento padronizado de exceções
+        
+        Args:
+            exception: A exceção capturada
+            operation_name: Nome da operação que falhou
+            default_return: Valor padrão a retornar em caso de erro
+            
+        Returns:
+            O valor padrão especificado
+        """
+        error_msg = f"Erro em {operation_name}: {str(exception)}"
+        if self.log_manager:
+            self.log_manager.log_error(exception, error_msg)
+        return default_return
+    
+    def _validate_download_exists(self, download_id):
+        """
+        Valida se um download existe no banco de dados
+        
+        Args:
+            download_id: ID do download a validar
+            
+        Returns:
+            tuple: (download_data, error_message) - download_data é None se não encontrado
+        """
+        try:
+            download = self.db_manager.get_download_by_id(download_id)
+            if not download:
+                return None, "Download não encontrado no histórico"
+            return download, None
+        except Exception as e:
+            return None, f"Erro ao buscar download: {str(e)}"
         
     def add_download_to_history(self, download_data):
         """
@@ -39,9 +83,12 @@ class HistoryManager:
             # Adicionar ao banco
             download_id = self.db_manager.add_download(prepared_data)
             
+            # Armazenar o último ID para referência
+            self._last_download_id = download_id
+            
             if self.log_manager:
                 self.log_manager.log_info(
-                    f"Download adicionado ao histórico: {prepared_data.get('title', 'N/A')}"
+                    f"Download adicionado ao histórico: {prepared_data.get('title', 'N/A')} (ID: {download_id})"
                 )
             
             return True, download_id
@@ -51,6 +98,15 @@ class HistoryManager:
             if self.log_manager:
                 self.log_manager.log_error(e, "Histórico")
             return False, error_msg
+    
+    def get_last_download_id(self):
+        """
+        Obtém o ID do último download adicionado ao histórico
+        
+        Returns:
+            int: ID do último download ou None se não houver
+        """
+        return getattr(self, '_last_download_id', None)
     
     def _prepare_download_data(self, download_data):
         """Prepara dados do download com valores padrão"""
@@ -88,9 +144,23 @@ class HistoryManager:
             return result['downloads']
             
         except Exception as e:
-            if self.log_manager:
-                self.log_manager.log_error(e, "Erro ao obter histórico")
-            return []
+            return self._handle_exception(e, "obter downloads recentes", [])
+    
+    def filter_downloads_by_criteria(self, criteria_type, criteria_value, page=1, per_page=50):
+        """
+        Método genérico para filtrar downloads por diferentes critérios
+        
+        Args:
+            criteria_type (str): Tipo do critério ('resolution', 'status', etc.)
+            criteria_value (str): Valor do critério para filtrar
+            page (int): Página atual
+            per_page (int): Itens por página
+            
+        Returns:
+            dict: Resultado paginado com downloads filtrados
+        """
+        filters = {criteria_type: criteria_value}
+        return self.get_downloads_paginated(page, per_page, filters)
     
     def filter_downloads_by_resolution(self, resolution, page=1, per_page=50):
         """
@@ -104,8 +174,7 @@ class HistoryManager:
         Returns:
             dict: Resultado paginado com downloads filtrados
         """
-        filters = {'resolution': resolution}
-        return self.get_downloads_paginated(page, per_page, filters)
+        return self.filter_downloads_by_criteria('resolution', resolution, page, per_page)
     
     def filter_downloads_by_status(self, status, page=1, per_page=50):
         """
@@ -119,8 +188,7 @@ class HistoryManager:
         Returns:
             dict: Resultado paginado com downloads filtrados
         """
-        filters = {'status': status}
-        return self.get_downloads_paginated(page, per_page, filters)
+        return self.filter_downloads_by_criteria('status', status, page, per_page)
     
     def get_downloads_paginated(self, page=1, per_page=50, filters=None):
         """
@@ -147,26 +215,21 @@ class HistoryManager:
                 formatted_download = self._format_download_for_display(download)
                 formatted_downloads.append(formatted_download)
             
+            # Criar estrutura de paginação baseada no padrão
+            pagination = self.DEFAULT_PAGINATION.copy()
+            pagination.update(result['pagination'])
+            
             # Retornar resultado formatado
             return {
                 'downloads': formatted_downloads,
-                'pagination': result['pagination']
+                'pagination': pagination
             }
             
         except Exception as e:
-            if self.log_manager:
-                self.log_manager.log_error(e, "Erro ao obter downloads paginados")
-            return {
+            return self._handle_exception(e, "obter downloads paginados", {
                 'downloads': [],
-                'pagination': {
-                    'current_page': 1,
-                    'per_page': per_page,
-                    'total_count': 0,
-                    'total_pages': 0,
-                    'has_previous': False,
-                    'has_next': False
-                }
-            }
+                'pagination': self.DEFAULT_PAGINATION.copy()
+            })
     
     def get_total_downloads_count(self, filters=None):
         """
@@ -351,39 +414,37 @@ class HistoryManager:
             return success
             
         except Exception as e:
-            if self.log_manager:
-                self.log_manager.log_error(e, "Erro ao limpar histórico")
-            return False
+            return self._handle_exception(e, "limpar histórico", False)
     
     def remove_download_from_history(self, download_id):
         """
         Remove um download específico do histórico
         
         Args:
-            download_id (int): ID do download
+            download_id (int): ID do download a ser removido
             
         Returns:
-            bool: Sucesso da operação
+            bool: True se removido com sucesso, False caso contrário
         """
         try:
-            # Obter dados do download antes de remover
-            download = self.db_manager.get_download_by_id(download_id)
+            # Verificar se o download existe
+            download, error_msg = self._validate_download_exists(download_id)
             
-            if download:
-                success = self.db_manager.remove_download(download_id)
-                
-                if success and self.log_manager:
-                    title = download.get('title', 'N/A')
-                    self.log_manager.log_info(f"Download removido do histórico: {title}")
-                
-                return success
-            else:
+            if not download:
+                if self.log_manager:
+                    self.log_manager.log_warning(f"Tentativa de remover download inexistente: {download_id}")
                 return False
-                
+            
+            # Remover do banco de dados
+            success = self.db_manager.remove_download(download_id)
+            
+            if success and self.log_manager:
+                self.log_manager.log_info(f"Download removido do histórico: {download_id}")
+            
+            return success
+            
         except Exception as e:
-            if self.log_manager:
-                self.log_manager.log_error(e, "Erro ao remover download do histórico")
-            return False
+            return self._handle_exception(e, f"remover download {download_id} do histórico", False)
     
     def open_download_file(self, download_id):
         """
@@ -396,10 +457,10 @@ class HistoryManager:
             tuple: (sucesso, mensagem)
         """
         try:
-            download = self.db_manager.get_download_by_id(download_id)
-            
+            # Validar se download existe
+            download, error_msg = self._validate_download_exists(download_id)
             if not download:
-                return False, "Download não encontrado no histórico"
+                return False, error_msg
             
             file_path = download.get('download_path', '')
             
@@ -431,10 +492,10 @@ class HistoryManager:
             tuple: (sucesso, mensagem)
         """
         try:
-            download = self.db_manager.get_download_by_id(download_id)
-            
+            # Validar se download existe
+            download, error_msg = self._validate_download_exists(download_id)
             if not download:
-                return False, "Download não encontrado no histórico"
+                return False, error_msg
             
             file_path = download.get('download_path', '')
             
@@ -472,10 +533,10 @@ class HistoryManager:
             tuple: (sucesso, mensagem)
         """
         try:
-            download = self.db_manager.get_download_by_id(download_id)
-            
+            # Validar se download existe
+            download, error_msg = self._validate_download_exists(download_id)
             if not download:
-                return False, "Download não encontrado no histórico"
+                return False, error_msg
             
             url = download.get('url', '')
             
@@ -553,12 +614,10 @@ class HistoryManager:
             }
             
         except Exception as e:
-            if self.log_manager:
-                self.log_manager.log_error(e, "Erro ao obter estatísticas")
-            return {
+            return self._handle_exception(e, "obter estatísticas do histórico", {
                 'total_downloads': 0,
                 'total_size_mb': 0,
                 'total_size_gb': 0,
                 'resolutions': {},
                 'most_used_resolution': 'N/A'
-            }
+            })
