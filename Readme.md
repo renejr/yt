@@ -1,8 +1,8 @@
-# YouTube Video Downloader v2.1.5 - Analytics Corrigidos
+# YouTube Video Downloader v2.1.6 - Bandwidth Tracker & Refatoração
 
 🎬 **Aplicativo desktop modular em Python para baixar vídeos do YouTube com interface gráfica moderna e arquitetura robusta.**
 
-> **Versão 2.1.5**: Correções críticas nas funções de análise - todas as estatísticas e relatórios agora funcionam perfeitamente.
+> **Versão 2.1.6**: Sistema de monitoramento de largura de banda implementado e análise completa para refatoração do código.
 
 ## ✨ Funcionalidades
 
@@ -11,6 +11,7 @@
 - **Download de vídeos do YouTube** em múltiplas resoluções (360p até 4K)
 - **Download apenas de áudio** em formato MP3 com múltiplas qualidades (128-320 kbps)
 - **🎵 Download de playlists completas** com progresso individual por vídeo
+- **📊 Bandwidth Tracker** - Monitoramento em tempo real da velocidade de download
 - **Mini-player de preview** com thumbnail, metadados e botão de preview no navegador
 - **Widget de informações avançado** com conteúdo completo, links clicáveis e sistema de cópia
 - **Extração automática** de informações completas do vídeo
@@ -52,6 +53,16 @@
 - **Avisos de sucesso** - Feedback visual após downloads
 - **Performance otimizada** - Downloads mais estáveis e rápidos
 - **Manutenibilidade** - Código limpo e bem documentado
+
+### ✨ Novidades da Versão 2.1.6
+- **📊 Bandwidth Tracker implementado** - Sistema completo de monitoramento de largura de banda
+- **⚡ Rastreamento em tempo real** - Velocidade de download monitorada durante o processo
+- **📈 Gráficos de performance** - Análise visual da velocidade de download
+- **📋 Histórico de velocidades** - Armazenamento e consulta de dados de performance
+- **🔧 Refatoração do HistoryManager** - Eliminação de código duplicado e melhor organização
+- **📄 Análise completa do ui_components.py** - Documento detalhado de refatoração
+- **🏗️ Estratégia de modularização** - Plano para redução de 60% no tamanho do arquivo principal
+- **🗑️ Remoção do yt.py legado** - Transição completa para yt_refactored.py
 
 ### ✨ Novidades da Versão 2.1.5
 - **🐛 Correções críticas nas funções de análise** - Todas as estatísticas agora funcionam corretamente

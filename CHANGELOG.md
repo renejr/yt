@@ -2,6 +2,39 @@
 
 Todas as mudanças notáveis neste projeto serão documentadas neste arquivo.
 
+## [2.1.6] - 2024-12-19
+
+### ✨ Novas Funcionalidades
+- **Bandwidth Tracker**: Sistema completo de monitoramento de largura de banda
+  - Rastreamento em tempo real da velocidade de download
+  - Histórico de velocidades por download
+  - Gráficos de análise de performance
+  - Estatísticas de velocidade média, máxima e mínima
+  - Integração com interface gráfica
+
+### 🔧 Melhorias Técnicas
+- **Refatoração do HistoryManager**: Eliminação de código duplicado e melhor organização
+  - Remoção de imports órfãos
+  - Criação de métodos auxiliares para validação
+  - Padronização do tratamento de exceções
+  - Implementação de paginação padrão
+  - Consolidação de métodos de filtro
+- **Análise completa do ui_components.py**: Identificação de duplicações e estratégia de refatoração
+  - Documento detalhado de análise (`REFATORACAO_UI_COMPONENTS.md`)
+  - Plano de modularização em submódulos
+  - Estratégia para redução de 60% no tamanho do arquivo
+
+### 📊 Arquivos Adicionados
+- `bandwidth_tracker.py` - Sistema de monitoramento de largura de banda
+- `REFATORACAO_UI_COMPONENTS.md` - Análise e estratégia de refatoração
+- Scripts de teste para bandwidth tracker
+- `yt_legado_NAO_USAR.py` - Arquivo legado preservado
+
+### 🗑️ Arquivos Removidos
+- `yt.py` - Substituído definitivamente por `yt_refactored.py`
+
+---
+
 ## [2.1.5] - 2024-12-19
 
 ### 🐛 Correções Críticas

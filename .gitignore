@@ -21,6 +21,11 @@ downloads/
 # Arquivos antigos
 olds/
 
+# Arquivos de teste e debug
+test_*.py
+debug_*.py
+check_*.py
+
 # Arquivos do sistema
 .DS_Store
 Thumbs.db
@@ -28,6 +33,7 @@ Thumbs.db
 # IDEs e editores
 .idea/
 .vscode/
+.trae/
 *.swp
 *.swo
 
