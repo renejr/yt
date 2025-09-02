@@ -1,0 +1,903 @@
+{
+	"info": {
+		"_postman_id": "4c202601-4b8b-43e3-a015-b5e8af837a3f",
+		"name": "YouTube Downloader API",
+		"description": "Coleção completa da API REST do YouTube Downloader\n\n## Sobre a API\n\nEsta API permite:\n\n- Download de vídeos do YouTube\n    \n- Obtenção de informações de vídeos\n    \n- Monitoramento de progresso de downloads\n    \n- Histórico de downloads com paginação\n    \n\n## Configuração\n\n1. Configure a variável de ambiente `base_url` (padrão: [http://localhost:5000](http://localhost:5000))\n    \n2. Execute o endpoint Health Check para verificar se a API está funcionando\n    \n3. Use os demais endpoints conforme necessário\n    \n\n## Variáveis\n\n- `base_url`: URL base da API\n    \n- `download_id`: ID do download (preenchido automaticamente)\n    \n- `api_prefix`: Prefixo da API (/api/v1)",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "7726022",
+		"_collection_link": "https://mdk999.postman.co/workspace/YT~1d2e505c-9426-4908-ab26-019bee99ef49/collection/7726022-4c202601-4b8b-43e3-a015-b5e8af837a3f?action=share&source=collection_link&creator=7726022"
+	},
+	"item": [
+		{
+			"name": "Health Check",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has success status', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql('success');",
+							"});",
+							"",
+							"pm.test('API version is present', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.data).to.have.property('api_version');",
+							"});",
+							"",
+							"pm.test('Components status check', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.data).to.have.property('components');",
+							"    pm.expect(jsonData.data.components).to.be.an('object');",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/{{api_prefix}}/health",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"{{api_prefix}}",
+						"health"
+					]
+				},
+				"description": "Verifica se a API está funcionando e retorna o status dos componentes do sistema."
+			},
+			"response": [
+				{
+					"name": "Success Response",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/{{api_prefix}}/health",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"{{api_prefix}}",
+								"health"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"cookie": [],
+					"body": "{\n  \"status\": \"success\",\n  \"message\": \"API está funcionando\",\n  \"timestamp\": \"2024-01-15T10:30:00Z\",\n  \"data\": {\n    \"api_version\": \"1.0\",\n    \"status\": \"healthy\",\n    \"uptime\": \"2h 30m 15s\",\n    \"components\": {\n      \"database\": \"connected\",\n      \"download_manager\": \"available\",\n      \"config_manager\": \"available\"\n    }\n  }\n}"
+				}
+			]
+		},
+		{
+			"name": "Get Video Info",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has success status', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql('success');",
+							"});",
+							"",
+							"pm.test('Video info contains required fields', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.data).to.have.property('video_id');",
+							"    pm.expect(jsonData.data).to.have.property('title');",
+							"    pm.expect(jsonData.data).to.have.property('duration');",
+							"});",
+							"var template = `",
+							"<style type=\"text/css\">",
+							"    body { font-family: Arial, sans-serif; }",
+							"    .video-info { border: 1px solid #ccc; padding: 15px; margin: 10px; border-radius: 5px; }",
+							"    .video-info h2 { margin: 0; }",
+							"    .video-info p { margin: 5px 0; }",
+							"</style>",
+							"",
+							"<div class=\"video-info\">",
+							"    <h2>{{response.data.title}}</h2>",
+							"    <p><strong>Description:</strong> {{response.data.description}}</p>",
+							"    <p><strong>Uploader:</strong> {{response.data.uploader}}</p>",
+							"    <p><strong>Upload Date:</strong> {{response.data.upload_date}}</p>",
+							"    <p><strong>Duration:</strong> {{response.data.duration}} seconds</p>",
+							"    <p><strong>View Count:</strong> {{response.data.view_count}}</p>",
+							"    <p><strong>Like Count:</strong> {{response.data.like_count}}</p>",
+							"    <p><strong>Thumbnail:</strong> <img src=\"{{response.data.thumbnail}}\" alt=\"Thumbnail\" /></p>",
+							"    <p><strong>Available Resolutions:</strong> {{#each response.data.resolutions}}<span>{{this}}</span>{{#unless @last}}, {{/unless}}{{/each}}</p>",
+							"</div>",
+							"`;",
+							"",
+							"function constructVisualizerPayload() {",
+							"    return { response: pm.response.json() };",
+							"}",
+							"",
+							"pm.visualizer.set(template, constructVisualizerPayload());"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"url\": \"https://youtu.be/Vc7JbIf-3Ks?si=vmrurvyPHNUmODDI\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/{{api_prefix}}/video/info",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"{{api_prefix}}",
+						"video",
+						"info"
+					]
+				},
+				"description": "Obtém informações detalhadas de um vídeo do YouTube sem fazer o download."
+			},
+			"response": [
+				{
+					"name": "Success Response",
+					"originalRequest": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"https://www.youtube.com/watch?v=dQw4w9WgXcQ\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/{{api_prefix}}/video/info",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"{{api_prefix}}",
+								"video",
+								"info"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"cookie": [],
+					"body": "{\n  \"status\": \"success\",\n  \"message\": \"Informações do vídeo obtidas com sucesso\",\n  \"timestamp\": \"2024-01-15T10:30:00Z\",\n  \"data\": {\n    \"video_id\": \"dQw4w9WgXcQ\",\n    \"title\": \"Rick Astley - Never Gonna Give You Up\",\n    \"description\": \"The official video for Rick Astley...\",\n    \"duration\": 212,\n    \"view_count\": 1000000000,\n    \"upload_date\": \"2009-10-25\",\n    \"uploader\": \"Rick Astley\",\n    \"thumbnail\": \"https://img.youtube.com/vi/dQw4w9WgXcQ/maxresdefault.jpg\",\n    \"available_formats\": [\n      {\n        \"format_id\": \"22\",\n        \"ext\": \"mp4\",\n        \"resolution\": \"720p\",\n        \"filesize\": 52428800\n      }\n    ]\n  }\n}"
+				},
+				{
+					"name": "Validation Error",
+					"originalRequest": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"invalid-url\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/{{api_prefix}}/video/info",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"{{api_prefix}}",
+								"video",
+								"info"
+							]
+						}
+					},
+					"status": "Bad Request",
+					"code": 400,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"cookie": [],
+					"body": "{\n  \"status\": \"error\",\n  \"error\": {\n    \"code\": \"VALIDATION_ERROR\",\n    \"message\": \"Dados de entrada inválidos\",\n    \"details\": {\n      \"validation_errors\": {\n        \"url\": [\"URL inválida ou não suportada\"]\n      }\n    }\n  },\n  \"timestamp\": \"2024-01-15T10:30:00Z\"\n}"
+				}
+			]
+		},
+		{
+			"name": "Start Download",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 201', function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"",
+							"pm.test('Response has success status', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql('success');",
+							"});",
+							"",
+							"pm.test('Download ID is present', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.data).to.have.property('download_id');",
+							"    ",
+							"    // Salvar download_id para usar em outras requisições",
+							"    pm.environment.set('download_id', jsonData.data.download_id);",
+							"});",
+							"",
+							"pm.test('Download status is queued', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.data.status).to.eql('queued');",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json",
+						"type": "text"
+					},
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"url\": \"https://youtu.be/Vc7JbIf-3Ks?si=vmrurvyPHNUmODDI\",\n    \"audio_only\": false,\n    \"resolution\": \"best\"\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/{{api_prefix}}/download",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"{{api_prefix}}",
+						"download"
+					]
+				},
+				"description": "Inicia um novo download de vídeo do YouTube com as configurações especificadas."
+			},
+			"response": [
+				{
+					"name": "Success Response",
+					"originalRequest": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"url\": \"https://www.youtube.com/watch?v=dQw4w9WgXcQ\",\n  \"format\": \"mp4\",\n  \"resolution\": \"720p\",\n  \"audio_only\": false\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/{{api_prefix}}/download",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"{{api_prefix}}",
+								"download"
+							]
+						}
+					},
+					"status": "Created",
+					"code": 201,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"cookie": [],
+					"body": "{\n  \"status\": \"success\",\n  \"message\": \"Download iniciado com sucesso\",\n  \"timestamp\": \"2024-01-15T10:30:00Z\",\n  \"data\": {\n    \"download_id\": \"dl_1705312200_abc123\",\n    \"url\": \"https://www.youtube.com/watch?v=dQw4w9WgXcQ\",\n    \"status\": \"queued\",\n    \"created_at\": \"2024-01-15T10:30:00Z\",\n    \"estimated_size\": 52428800,\n    \"format\": \"mp4\",\n    \"resolution\": \"720p\"\n  }\n}"
+				}
+			]
+		},
+		{
+			"name": "Get Download Status",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has success status', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql('success');",
+							"});",
+							"",
+							"pm.test('Download status is valid', function () {",
+							"    const jsonData = pm.response.json();",
+							"    const validStatuses = ['queued', 'downloading', 'completed', 'failed', 'cancelled', 'paused'];",
+							"    pm.expect(validStatuses).to.include(jsonData.data.status);",
+							"});",
+							"",
+							"pm.test('Progress is a number', function () {",
+							"    const jsonData = pm.response.json();",
+							"    if (jsonData.data.progress !== undefined) {",
+							"        pm.expect(jsonData.data.progress).to.be.a('number');",
+							"        pm.expect(jsonData.data.progress).to.be.at.least(0);",
+							"        pm.expect(jsonData.data.progress).to.be.at.most(100);",
+							"    }",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": ""
+				},
+				"url": {
+					"raw": "{{base_url}}/{{api_prefix}}/download/{{download_id}}/status",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"{{api_prefix}}",
+						"download",
+						"{{download_id}}",
+						"status"
+					]
+				},
+				"description": "Obtém o status atual de um download específico usando o ID do download."
+			},
+			"response": [
+				{
+					"name": "Success Response",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/{{api_prefix}}/download/dl_1705312200_abc123/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"{{api_prefix}}",
+								"download",
+								"dl_1705312200_abc123",
+								"status"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"cookie": [],
+					"body": "{\n  \"status\": \"success\",\n  \"message\": \"Status do download obtido com sucesso\",\n  \"timestamp\": \"2024-01-15T10:32:15Z\",\n  \"data\": {\n    \"download_id\": \"dl_1705312200_abc123\",\n    \"status\": \"downloading\",\n    \"progress\": 45.5,\n    \"speed\": \"1.2 MB/s\",\n    \"eta\": \"00:02:30\",\n    \"downloaded_bytes\": 23887872,\n    \"total_bytes\": 52428800,\n    \"started_at\": \"2024-01-15T10:30:00Z\",\n    \"updated_at\": \"2024-01-15T10:32:15Z\"\n  }\n}"
+				},
+				{
+					"name": "Download Not Found",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/{{api_prefix}}/download/invalid_id/status",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"{{api_prefix}}",
+								"download",
+								"invalid_id",
+								"status"
+							]
+						}
+					},
+					"status": "Not Found",
+					"code": 404,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"cookie": [],
+					"body": "{\n  \"status\": \"error\",\n  \"error\": {\n    \"code\": \"DOWNLOAD_NOT_FOUND\",\n    \"message\": \"Download não encontrado\",\n    \"details\": null\n  },\n  \"timestamp\": \"2024-01-15T10:32:15Z\"\n}"
+				}
+			]
+		},
+		{
+			"name": "Get Download Progress",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has success status', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql('success');",
+							"});",
+							"",
+							"pm.test('Progress data structure is correct', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.data).to.have.property('progress');",
+							"    pm.expect(jsonData.data).to.have.property('video_info');",
+							"    pm.expect(jsonData.data).to.have.property('timestamps');",
+							"});",
+							"",
+							"pm.test('Progress percentage is valid', function () {",
+							"    const jsonData = pm.response.json();",
+							"    if (jsonData.data.progress && jsonData.data.progress.percentage !== undefined) {",
+							"        pm.expect(jsonData.data.progress.percentage).to.be.a('number');",
+							"        pm.expect(jsonData.data.progress.percentage).to.be.at.least(0);",
+							"        pm.expect(jsonData.data.progress.percentage).to.be.at.most(100);",
+							"    }",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/{{api_prefix}}/download/{{download_id}}/progress",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"{{api_prefix}}",
+						"download",
+						"{{download_id}}",
+						"progress"
+					]
+				},
+				"description": "Obtém informações detalhadas de progresso de um download específico, incluindo velocidade, ETA e informações do vídeo."
+			},
+			"response": [
+				{
+					"name": "Success Response",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/{{api_prefix}}/download/dl_1705312200_abc123/progress",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"{{api_prefix}}",
+								"download",
+								"dl_1705312200_abc123",
+								"progress"
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"cookie": [],
+					"body": "{\n  \"status\": \"success\",\n  \"message\": \"Progresso do download obtido com sucesso\",\n  \"timestamp\": \"2024-01-15T10:32:15Z\",\n  \"data\": {\n    \"download_id\": \"dl_1705312200_abc123\",\n    \"status\": \"downloading\",\n    \"progress\": {\n      \"percentage\": 45.5,\n      \"downloaded_bytes\": 23887872,\n      \"total_bytes\": 52428800,\n      \"speed\": \"1.2 MB/s\",\n      \"eta\": \"00:02:30\"\n    },\n    \"video_info\": {\n      \"title\": \"Rick Astley - Never Gonna Give You Up\",\n      \"duration\": 212,\n      \"format\": \"mp4\",\n      \"resolution\": \"720p\"\n    },\n    \"timestamps\": {\n      \"created_at\": \"2024-01-15T10:30:00Z\",\n      \"started_at\": \"2024-01-15T10:30:00Z\",\n      \"updated_at\": \"2024-01-15T10:32:15Z\"\n    }\n  }\n}"
+				}
+			]
+		},
+		{
+			"name": "Get Download History",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"pm.test('Status code is 200', function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"",
+							"pm.test('Response has success status', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.status).to.eql('success');",
+							"});",
+							"",
+							"pm.test('Downloads array is present', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.data).to.have.property('downloads');",
+							"    pm.expect(jsonData.data.downloads).to.be.an('array');",
+							"});",
+							"",
+							"pm.test('Pagination info is present', function () {",
+							"    const jsonData = pm.response.json();",
+							"    pm.expect(jsonData.data).to.have.property('pagination');",
+							"    pm.expect(jsonData.data.pagination).to.have.property('page');",
+							"    pm.expect(jsonData.data.pagination).to.have.property('per_page');",
+							"    pm.expect(jsonData.data.pagination).to.have.property('total_items');",
+							"    pm.expect(jsonData.data.pagination).to.have.property('total_pages');",
+							"});",
+							"",
+							"pm.test('Pagination values are valid', function () {",
+							"    const jsonData = pm.response.json();",
+							"    const pagination = jsonData.data.pagination;",
+							"    pm.expect(pagination.page).to.be.a('number').and.to.be.at.least(1);",
+							"    pm.expect(pagination.per_page).to.be.a('number').and.to.be.at.least(1);",
+							"    pm.expect(pagination.total_items).to.be.a('number').and.to.be.at.least(0);",
+							"    pm.expect(pagination.total_pages).to.be.a('number').and.to.be.at.least(0);",
+							"});"
+						],
+						"type": "text/javascript",
+						"packages": {}
+					}
+				}
+			],
+			"protocolProfileBehavior": {
+				"disableBodyPruning": true
+			},
+			"request": {
+				"method": "GET",
+				"header": [
+					{
+						"key": "Accept",
+						"value": "application/json",
+						"type": "text"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{base_url}}/{{api_prefix}}/downloads?page=1&per_page=10&status=completed",
+					"host": [
+						"{{base_url}}"
+					],
+					"path": [
+						"{{api_prefix}}",
+						"downloads"
+					],
+					"query": [
+						{
+							"key": "page",
+							"value": "1",
+							"description": "Número da página (padrão: 1)"
+						},
+						{
+							"key": "per_page",
+							"value": "10",
+							"description": "Itens por página (padrão: 10, máximo: 100)"
+						},
+						{
+							"key": "status",
+							"value": "completed",
+							"description": "Filtrar por status (opcional)"
+						}
+					]
+				},
+				"description": "Obtém o histórico de downloads com suporte a paginação e filtros por status."
+			},
+			"response": [
+				{
+					"name": "Success Response",
+					"originalRequest": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{base_url}}/{{api_prefix}}/downloads?page=1&per_page=10",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"{{api_prefix}}",
+								"downloads"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1"
+								},
+								{
+									"key": "per_page",
+									"value": "10"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "json",
+					"header": [
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						}
+					],
+					"cookie": [],
+					"body": "{\n  \"status\": \"success\",\n  \"message\": \"Histórico de downloads obtido com sucesso\",\n  \"timestamp\": \"2024-01-15T10:30:00Z\",\n  \"data\": {\n    \"downloads\": [\n      {\n        \"download_id\": \"dl_1705312200_abc123\",\n        \"url\": \"https://www.youtube.com/watch?v=dQw4w9WgXcQ\",\n        \"title\": \"Rick Astley - Never Gonna Give You Up\",\n        \"status\": \"completed\",\n        \"format\": \"mp4\",\n        \"resolution\": \"720p\",\n        \"file_size\": 52428800,\n        \"created_at\": \"2024-01-15T10:30:00Z\",\n        \"completed_at\": \"2024-01-15T10:33:45Z\"\n      }\n    ],\n    \"pagination\": {\n      \"page\": 1,\n      \"per_page\": 10,\n      \"total_items\": 150,\n      \"total_pages\": 15,\n      \"has_next\": true,\n      \"has_prev\": false\n    }\n  }\n}"
+				},
+				{
+					"name": "Get Download History",
+					"originalRequest": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Accept",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{base_url}}/{{api_prefix}}/downloads?page=1&per_page=10&status=completed",
+							"host": [
+								"{{base_url}}"
+							],
+							"path": [
+								"{{api_prefix}}",
+								"downloads"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "1",
+									"description": "Número da página (padrão: 1)"
+								},
+								{
+									"key": "per_page",
+									"value": "10",
+									"description": "Itens por página (padrão: 10, máximo: 100)"
+								},
+								{
+									"key": "status",
+									"value": "completed",
+									"description": "Filtrar por status (opcional)"
+								}
+							]
+						}
+					},
+					"status": "OK",
+					"code": 200,
+					"_postman_previewlanguage": "",
+					"header": [
+						{
+							"key": "Server",
+							"value": "Werkzeug/3.1.3 Python/3.13.5"
+						},
+						{
+							"key": "Date",
+							"value": "Tue, 02 Sep 2025 21:41:38 GMT"
+						},
+						{
+							"key": "Content-Type",
+							"value": "application/json"
+						},
+						{
+							"key": "Content-Length",
+							"value": "32141"
+						},
+						{
+							"key": "Access-Control-Allow-Origin",
+							"value": "*"
+						},
+						{
+							"key": "Connection",
+							"value": "close"
+						}
+					],
+					"cookie": [],
+					"body": "{\n    \"data\": {\n        \"downloads\": [\n            {\n                \"date_formatted\": \"02/09/2025 21:40\",\n                \"description\": \"Junte-se a mim nesta incrível visita a uma loja de retro games em Paris, onde descobri um porão lotado de tesouros! \\n\\nA loja tinha uma seleção inacreditável de jogos de Sega Mega Drive, Super Nintendo, PlayStation, Master System, PlayStation 2, NES, Game Boy e até raridades de Neo Geo, PC Engine e 3DO. \\n\\nEsse é o terceiro vídeo da série sobre loja de retro games em Paris. Quer ver os outros 2? Só clicar nos links abaixo:\\n\\n🕹️ 4 Lojas de Retro Games em Paris: https://youtu.be/S4EKK3lEsto?si=OplF7ducYV8Tg_TE\\n🕹️ A Melhor Loja de Retro Games em Paris: https://youtu.be/P6Zxu4BX1kY?si=eBwhQEBpjCzl7BDt\\n\\nVideos sobre consoles que aparecem nesse vídeo:\\n🕹️ Neo Geo raro para aluguel: https://youtu.be/F6qGxluRKjY?si=T0QgtOPWJhV9fdf4\\n🕹️ PC Engine LT: https://youtu.be/2qVjwczHPzI?si=HOeW7rwvZCm6u_XH\\n🕹️ PC Engine Monitor: https://youtu.be/jzphPVCtMZI?si=DGHt6hTUAxvNO_IU\\n🕹️ Pioneer LaserActive: https://youtu.be/-X_7INstEYc?si=yTuaqJz2-UR0VqeN\\n\\n\\n#retrogames #JogosRetro #Sega #Nintendo #PlayStation #NeoGeo #GameBoy #Colecionismo #Paris #retrogamerbrasil #retrogaming \\n\\nMinhas redes sociais:\\nInstagram: https://www.instagram.com/retrogamer.brasil/\\nFacebook: https://www.facebook.com/retrogamer.brazil\\nTikTok: https://www.tiktok.com/@retrogamerbrasil\",\n                \"download_path\": \"downloads\",\n                \"duration\": null,\n                \"duration_formatted\": \"Não disponível\",\n                \"file_size\": null,\n                \"id\": 203,\n                \"like_count\": 1224,\n                \"resolution\": \"best\",\n                \"status\": \"queued\",\n                \"subtitle_embedded\": null,\n                \"subtitle_lang\": null,\n                \"thumbnail_url\": \"https://i.ytimg.com/vi/Vc7JbIf-3Ks/maxresdefault.jpg\",\n                \"timestamp\": \"2025-09-02 21:40:42\",\n                \"title\": \"Achei um PORÃO cheio de RETRO GAMES em PARIS.\",\n                \"title_short\": \"Achei um PORÃO cheio de RETRO GAMES em PARIS.\",\n                \"uploader\": \"RetroGamer Brasil\",\n                \"url\": \"https://youtu.be/Vc7JbIf-3Ks?si=vmrurvyPHNUmODDI\",\n                \"view_count\": 9976,\n                \"view_count_formatted\": \"9,976\"\n            },\n            {\n                \"date_formatted\": \"02/09/2025 21:30\",\n                \"description\": \"The official video for “Never Gonna Give You Up” by Rick Astley. \\n\\nNever: The Autobiography 📚 OUT NOW! \\nFollow this link to get your copy and listen to Rick’s ‘Never’ playlist ❤️ #RickAstleyNever\\nhttps://linktr.ee/rickastleynever\\n\\n“Never Gonna Give You Up” was a global smash on its release in July 1987, topping the charts in 25 countries including Rick’s native UK and the US Billboard Hot 100.  It also won the Brit Award for Best single in 1988. Stock Aitken and Waterman wrote and produced the track which was the lead-off single and lead track from Rick’s debut LP “Whenever You Need Somebody”.  The album was itself a UK number one and would go on to sell over 15 million copies worldwide.\\n\\nThe legendary video was directed by Simon West – who later went on to make Hollywood blockbusters such as Con Air, Lara Croft – Tomb Raider and The Expendables 2.  The video passed the 1bn YouTube views milestone on 28 July 2021.\\n\\nSubscribe to the official Rick Astley YouTube channel: https://RickAstley.lnk.to/YTSubID\\n\\nFollow Rick Astley:\\nFacebook: https://RickAstley.lnk.to/FBFollowID \\nTwitter: https://RickAstley.lnk.to/TwitterID \\nInstagram: https://RickAstley.lnk.to/InstagramID \\nWebsite: https://RickAstley.lnk.to/storeID \\nTikTok: https://RickAstley.lnk.to/TikTokID\\n\\nListen to Rick Astley:\\nSpotify: https://RickAstley.lnk.to/SpotifyID \\nApple Music: https://RickAstley.lnk.to/AppleMusicID \\nAmazon Music: https://RickAstley.lnk.to/AmazonMusicID \\nDeezer: https://RickAstley.lnk.to/DeezerID \\n\\nLyrics:\\nWe’re no strangers to love\\nYou know the rules and so do I\\nA full commitment’s what I’m thinking of\\nYou wouldn’t get this from any other guy\\n\\nI just wanna tell you how I’m feeling\\nGotta make you understand\\n\\nNever gonna give you up\\nNever gonna let you down\\nNever gonna run around and desert you\\nNever gonna make you cry\\nNever gonna say goodbye\\nNever gonna tell a lie and hurt you\\n\\nWe’ve known each other for so long\\nYour heart’s been aching but you’re too shy to say it\\nInside we both know what’s been going on\\nWe know the game and we’re gonna play it\\n\\nAnd if you ask me how I’m feeling\\nDon’t tell me you’re too blind to see\\n\\nNever gonna give you up\\nNever gonna let you down\\nNever gonna run around and desert you\\nNever gonna make you cry\\nNever gonna say goodbye\\nNever gonna tell a lie and hurt you\\n\\n#RickAstley #NeverGonnaGiveYouUp #WheneverYouNeedSomebody #OfficialMusicVideo\",\n                \"download_path\": \"downloads\",\n                \"duration\": null,\n                \"duration_formatted\": \"Não disponível\",\n                \"file_size\": null,\n                \"id\": 202,\n                \"like_count\": 18531731,\n                \"resolution\": \"audio-best\",\n                \"status\": \"queued\",\n                \"subtitle_embedded\": null,\n                \"subtitle_lang\": null,\n                \"thumbnail_url\": \"https://i.ytimg.com/vi_webp/dQw4w9WgXcQ/maxresdefault.webp\",\n                \"timestamp\": \"2025-09-02 21:30:55\",\n                \"title\": \"Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)\",\n                \"title_short\": \"Rick Astley - Never Gonna Give You Up (Official Vi...\",\n                \"uploader\": \"Rick Astley\",\n                \"url\": \"https://www.youtube.com/watch?v=dQw4w9WgXcQ\",\n                \"view_count\": 1690301432,\n                \"view_count_formatted\": \"1,690,301,432\"\n            },\n            {\n                \"date_formatted\": \"02/09/2025 20:27\",\n                \"description\": \"⭐️  𝗘𝗫𝗖𝗟𝗨𝗦𝗜𝗩𝗘 𝗠𝗜𝗫  ⭐️\\n\\nS P E E D S O U N D  ★  R E C O R D S  (👽★⚡)\\n\\n★ Follow the Label ★ \\n\\n+ YOUTUBE +\\nhttps://www.youtube.com/user/speedsoundtv\\n+ SPOTIFY +\\nhttps://open.spotify.com/playlist/4ttrpqZDbl8pwsxIe8vpuZ?si=9263d77ab93d468f\\n+ SAMPLE PACKS / DAW TEMPLATES +\\nhttps://www.producerloops.com/Speedsound\\n+ BANDCAMP +\\nhttps://drop7.bandcamp.com/\\n+ BEATPORT +\\nhttps://www.beatport.com/label/speedsound-rec/49066\\n+ FAN PAGE +\\nhttps://www.facebook.com/speedsoundmusic\\n+ INSTAGRAM +\\nhttps://instagram.com/speedsound.rec\\n+ TELEGRAM +\\nhttps://t.me/+Wpd05JRp654yMGQx\\n+ PSYLOOPS +\\nhttps://www.facebook.com/pg/psyloops.uk\\n+ SOUNDCLOUD +\\nhttps://soundcloud.com/speedsound\\n+ TWITTER +\\nhttps://twitter.com/speedsoundmusic\\n+ TIKTOK +\\nhttps://www.tiktok.com/@speedsound.rec\\n\\n\\n𝗩𝗶𝗱𝗲𝗼 𝗰𝗿𝗲𝗱𝗶𝘁𝘀: AI Manifest\\nYouTube:\\nhttps://www.youtube.com/@aimanifest\\nFollow the Socials: \\nhttps://linktr.ee/AIManifest\\n\\n\\n𝗦𝗲𝗻𝗱 𝘆𝗼𝘂𝗿 𝗗𝗲𝗺𝗼𝘀 / 𝗬𝗼𝘂𝗧𝘂𝗯𝗲 𝗽𝗿𝗼𝗺𝗼𝘁𝗶𝗼𝗻 / 𝗣𝗮𝗿𝘁𝗻𝗲𝗿𝘀𝗵𝗶𝗽𝘀\\n📧 Mail: xvibe.com@gmail.com\\n\\n\\n𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲 𝗣𝘀𝘆𝗰𝗵𝗲𝗱𝗲𝗹𝗶𝗰 𝗩𝗼𝗰𝗮𝗹𝘀 𝗣𝗮𝗰𝗸\\nhttps://www.producerloops.com/Download-Speedsound-Psytrance-Psychedelic-Vocals-Pack.html\\n\\n𝗔𝗯𝗹𝗲𝘁𝗼𝗻 𝗟𝗶𝘃𝗲 𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲 𝗧𝗲𝗺𝗽𝗹𝗮𝘁𝗲: 𝗔𝘀𝘁𝗿𝗮𝗹 𝗧𝗿𝗶𝗽\\nhttps://www.producerloops.com/Download-Speedsound-Ableton-Live-Psytrance-Template-Astral-Trip.html\\n\\n𝗧𝗵𝗲 𝗟𝗮𝘀𝘁 𝗗𝗲𝗰𝗮𝗱𝗲 𝗼𝗳 𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲: 𝗣𝘀𝘆𝗰𝗵𝗲𝗱𝗲𝗹𝗶𝗰 𝗧𝗿𝗮𝗻𝗰𝗲\\nhttps://www.producerloops.com/Download-Speedsound-The-Last-Decade-of-Psytrance-Psychedelic-Trance.html\\n\\n\\nTurn on the 🔔 to get notifications for new uploads!\\n\\n\\n📋 Tags:\\n#psytrance #psychedelic #trance #trancefamily #psy #psychedelictrance #visual #trippy #raves #speedsound #abstract #trippyvideos #aiart #TrippyVibes #PsychedelicJourney #Mushrooms #TranceMusic #PsychedelicExperience #MindExpansion #MusicAndNature #PsychedelicVisuals #SonicJourney #MushroomVibes #PsychedelicArt #TranceVibes\\n\\n🙏🏻🎯 THANKS FOR WATCHING!\\n\\n© Speedsound Records - 2024\",\n                \"download_path\": \"downloads\",\n                \"duration\": null,\n                \"duration_formatted\": \"Não disponível\",\n                \"file_size\": null,\n                \"id\": 201,\n                \"like_count\": 20739,\n                \"resolution\": \"best\",\n                \"status\": \"queued\",\n                \"subtitle_embedded\": null,\n                \"subtitle_lang\": null,\n                \"thumbnail_url\": \"https://i.ytimg.com/vi_webp/Y91C2yTq8BQ/maxresdefault.webp\",\n                \"timestamp\": \"2025-09-02 20:27:36\",\n                \"title\": \"Progressive Psytrance - Electric Samurai / Hallucinations mix 2024 (AI Psychedelic Graphic Visuals)\",\n                \"title_short\": \"Progressive Psytrance - Electric Samurai / Halluci...\",\n                \"uploader\": \"Speedsound\",\n                \"url\": \"https://youtu.be/Y91C2yTq8BQ?si=Dy-gNJVLyps4FMD1\",\n                \"view_count\": 1595967,\n                \"view_count_formatted\": \"1,595,967\"\n            },\n            {\n                \"date_formatted\": \"02/09/2025 20:10\",\n                \"description\": \"⭐️  𝗘𝗫𝗖𝗟𝗨𝗦𝗜𝗩𝗘 𝗠𝗜𝗫  ⭐️\\n\\nS P E E D S O U N D  ★  R E C O R D S  (👽★⚡)\\n\\n★ Follow the Label ★ \\n\\n+ YOUTUBE +\\nhttps://www.youtube.com/user/speedsoundtv\\n+ SPOTIFY +\\nhttps://open.spotify.com/playlist/4ttrpqZDbl8pwsxIe8vpuZ?si=9263d77ab93d468f\\n+ SAMPLE PACKS / DAW TEMPLATES +\\nhttps://www.producerloops.com/Speedsound\\n+ BANDCAMP +\\nhttps://drop7.bandcamp.com/\\n+ BEATPORT +\\nhttps://www.beatport.com/label/speedsound-rec/49066\\n+ FAN PAGE +\\nhttps://www.facebook.com/speedsoundmusic\\n+ INSTAGRAM +\\nhttps://instagram.com/speedsound.rec\\n+ TELEGRAM +\\nhttps://t.me/+Wpd05JRp654yMGQx\\n+ PSYLOOPS +\\nhttps://www.facebook.com/pg/psyloops.uk\\n+ SOUNDCLOUD +\\nhttps://soundcloud.com/speedsound\\n+ TWITTER +\\nhttps://twitter.com/speedsoundmusic\\n+ TIKTOK +\\nhttps://www.tiktok.com/@speedsound.rec\\n\\n\\n𝗩𝗶𝗱𝗲𝗼 𝗰𝗿𝗲𝗱𝗶𝘁𝘀: AI Manifest\\nYouTube:\\nhttps://www.youtube.com/@aimanifest\\nFollow the Socials: \\nhttps://linktr.ee/AIManifest\\n\\n\\n𝗦𝗲𝗻𝗱 𝘆𝗼𝘂𝗿 𝗗𝗲𝗺𝗼𝘀 / 𝗬𝗼𝘂𝗧𝘂𝗯𝗲 𝗽𝗿𝗼𝗺𝗼𝘁𝗶𝗼𝗻 / 𝗣𝗮𝗿𝘁𝗻𝗲𝗿𝘀𝗵𝗶𝗽𝘀\\n📧 Mail: xvibe.com@gmail.com\\n\\n\\n𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲 𝗣𝘀𝘆𝗰𝗵𝗲𝗱𝗲𝗹𝗶𝗰 𝗩𝗼𝗰𝗮𝗹𝘀 𝗣𝗮𝗰𝗸\\nhttps://www.producerloops.com/Download-Speedsound-Psytrance-Psychedelic-Vocals-Pack.html\\n\\n𝗔𝗯𝗹𝗲𝘁𝗼𝗻 𝗟𝗶𝘃𝗲 𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲 𝗧𝗲𝗺𝗽𝗹𝗮𝘁𝗲: 𝗔𝘀𝘁𝗿𝗮𝗹 𝗧𝗿𝗶𝗽\\nhttps://www.producerloops.com/Download-Speedsound-Ableton-Live-Psytrance-Template-Astral-Trip.html\\n\\n𝗧𝗵𝗲 𝗟𝗮𝘀𝘁 𝗗𝗲𝗰𝗮𝗱𝗲 𝗼𝗳 𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲: 𝗣𝘀𝘆𝗰𝗵𝗲𝗱𝗲𝗹𝗶𝗰 𝗧𝗿𝗮𝗻𝗰𝗲\\nhttps://www.producerloops.com/Download-Speedsound-The-Last-Decade-of-Psytrance-Psychedelic-Trance.html\\n\\n\\nTurn on the 🔔 to get notifications for new uploads!\\n\\n\\n📋 Tags:\\n#psytrance #psychedelic #trance #trancefamily #psy #psychedelictrance #visual #trippy #raves #speedsound #abstract #trippyvideos #aiart #TrippyVibes #PsychedelicJourney #Mushrooms #TranceMusic #PsychedelicExperience #MindExpansion #MusicAndNature #PsychedelicVisuals #SonicJourney #MushroomVibes #PsychedelicArt #TranceVibes\\n\\n🙏🏻🎯 THANKS FOR WATCHING!\\n\\n© Speedsound Records - 2024\",\n                \"download_path\": null,\n                \"duration\": null,\n                \"duration_formatted\": \"Não disponível\",\n                \"file_size\": \"2525537970\",\n                \"id\": 200,\n                \"like_count\": 0,\n                \"resolution\": \"1920x1080\",\n                \"status\": \"completed\",\n                \"subtitle_embedded\": null,\n                \"subtitle_lang\": null,\n                \"thumbnail_url\": \"\",\n                \"timestamp\": \"2025-09-02 20:10:27\",\n                \"title\": \"Progressive Psytrance - Electric Samurai / Hallucinations mix 2024 (AI Psychedelic Graphic Visuals)\",\n                \"title_short\": \"Progressive Psytrance - Electric Samurai / Halluci...\",\n                \"uploader\": \"Speedsound\",\n                \"url\": \"https://youtu.be/Y91C2yTq8BQ?si=Dy-gNJVLyps4FMD1\",\n                \"view_count\": \"1,595,860\",\n                \"view_count_formatted\": \"1,595,860\"\n            },\n            {\n                \"date_formatted\": \"02/09/2025 20:10\",\n                \"description\": \"⭐️  𝗘𝗫𝗖𝗟𝗨𝗦𝗜𝗩𝗘 𝗠𝗜𝗫  ⭐️\\n\\nS P E E D S O U N D  ★  R E C O R D S  (👽★⚡)\\n\\n★ Follow the Label ★ \\n\\n+ YOUTUBE +\\nhttps://www.youtube.com/user/speedsoundtv\\n+ SPOTIFY +\\nhttps://open.spotify.com/playlist/4ttrpqZDbl8pwsxIe8vpuZ?si=9263d77ab93d468f\\n+ SAMPLE PACKS / DAW TEMPLATES +\\nhttps://www.producerloops.com/Speedsound\\n+ BANDCAMP +\\nhttps://drop7.bandcamp.com/\\n+ BEATPORT +\\nhttps://www.beatport.com/label/speedsound-rec/49066\\n+ FAN PAGE +\\nhttps://www.facebook.com/speedsoundmusic\\n+ INSTAGRAM +\\nhttps://instagram.com/speedsound.rec\\n+ TELEGRAM +\\nhttps://t.me/+Wpd05JRp654yMGQx\\n+ PSYLOOPS +\\nhttps://www.facebook.com/pg/psyloops.uk\\n+ SOUNDCLOUD +\\nhttps://soundcloud.com/speedsound\\n+ TWITTER +\\nhttps://twitter.com/speedsoundmusic\\n+ TIKTOK +\\nhttps://www.tiktok.com/@speedsound.rec\\n\\n\\n𝗩𝗶𝗱𝗲𝗼 𝗰𝗿𝗲𝗱𝗶𝘁𝘀: AI Manifest\\nYouTube:\\nhttps://www.youtube.com/@aimanifest\\nFollow the Socials: \\nhttps://linktr.ee/AIManifest\\n\\n\\n𝗦𝗲𝗻𝗱 𝘆𝗼𝘂𝗿 𝗗𝗲𝗺𝗼𝘀 / 𝗬𝗼𝘂𝗧𝘂𝗯𝗲 𝗽𝗿𝗼𝗺𝗼𝘁𝗶𝗼𝗻 / 𝗣𝗮𝗿𝘁𝗻𝗲𝗿𝘀𝗵𝗶𝗽𝘀\\n📧 Mail: xvibe.com@gmail.com\\n\\n\\n𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲 𝗣𝘀𝘆𝗰𝗵𝗲𝗱𝗲𝗹𝗶𝗰 𝗩𝗼𝗰𝗮𝗹𝘀 𝗣𝗮𝗰𝗸\\nhttps://www.producerloops.com/Download-Speedsound-Psytrance-Psychedelic-Vocals-Pack.html\\n\\n𝗔𝗯𝗹𝗲𝘁𝗼𝗻 𝗟𝗶𝘃𝗲 𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲 𝗧𝗲𝗺𝗽𝗹𝗮𝘁𝗲: 𝗔𝘀𝘁𝗿𝗮𝗹 𝗧𝗿𝗶𝗽\\nhttps://www.producerloops.com/Download-Speedsound-Ableton-Live-Psytrance-Template-Astral-Trip.html\\n\\n𝗧𝗵𝗲 𝗟𝗮𝘀𝘁 𝗗𝗲𝗰𝗮𝗱𝗲 𝗼𝗳 𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲: 𝗣𝘀𝘆𝗰𝗵𝗲𝗱𝗲𝗹𝗶𝗰 𝗧𝗿𝗮𝗻𝗰𝗲\\nhttps://www.producerloops.com/Download-Speedsound-The-Last-Decade-of-Psytrance-Psychedelic-Trance.html\\n\\n\\nTurn on the 🔔 to get notifications for new uploads!\\n\\n\\n📋 Tags:\\n#psytrance #psychedelic #trance #trancefamily #psy #psychedelictrance #visual #trippy #raves #speedsound #abstract #trippyvideos #aiart #TrippyVibes #PsychedelicJourney #Mushrooms #TranceMusic #PsychedelicExperience #MindExpansion #MusicAndNature #PsychedelicVisuals #SonicJourney #MushroomVibes #PsychedelicArt #TranceVibes\\n\\n🙏🏻🎯 THANKS FOR WATCHING!\\n\\n© Speedsound Records - 2024\",\n                \"download_path\": \"downloads\",\n                \"duration\": null,\n                \"duration_formatted\": \"Não disponível\",\n                \"file_size\": null,\n                \"id\": 199,\n                \"like_count\": 20739,\n                \"resolution\": \"best\",\n                \"status\": \"queued\",\n                \"subtitle_embedded\": null,\n                \"subtitle_lang\": null,\n                \"thumbnail_url\": \"https://i.ytimg.com/vi_webp/Y91C2yTq8BQ/maxresdefault.webp\",\n                \"timestamp\": \"2025-09-02 20:10:07\",\n                \"title\": \"Progressive Psytrance - Electric Samurai / Hallucinations mix 2024 (AI Psychedelic Graphic Visuals)\",\n                \"title_short\": \"Progressive Psytrance - Electric Samurai / Halluci...\",\n                \"uploader\": \"Speedsound\",\n                \"url\": \"https://youtu.be/Y91C2yTq8BQ?si=Dy-gNJVLyps4FMD1\",\n                \"view_count\": 1595927,\n                \"view_count_formatted\": \"1,595,927\"\n            },\n            {\n                \"date_formatted\": \"02/09/2025 16:51\",\n                \"description\": \"Willkommen in der Welt von Cosmic Pressure – ein durchgehend treibender Goa-Psytrance-Track, der ohne Einleitung direkt in tiefe Basswellen und hypnotische Energie eintaucht.\\nSchnelle Kicks, fließende Basslinien und minimale Synths treffen auf kosmische Effekte, Acid-Twists und pulsierende Rhythmen. Der Sound ist intensiv, organisch und psychedelisch – wie eine Reise durch leuchtende Energieadern eines außerweltlichen Raums.Erlebe 26 Tracks in einer durchgehenden Reise durch druckvolle Goa- und Psytrance-Sphären.Jeder Track entfaltet einen eigenen Aspekt kosmischer Energie: von säurehaltigen Bassspiralen über tribalartige Drive-Loops bis zu neurotrancigen Strukturen.\\n\\n🎧 Musikstile: Goa Trance, Psytrance, Psygressive, Acid Psy, Cosmic Trance, Deep Psy\\n\\n👉 Abonniere für mehr hypnotische Goa-Experimente und visuelle Trips.\\n\\n#goatrance #psytrance #cosmicpressure #trancemusic #psytrance psychodelicjourney #aiart #goaenergy #trancestate \\n\\n🌀 Kapitel / Trackliste \\n\\n00:00 – Quantum Serpent  \\n04:41 – Neuro Spiral Gate  \\n09:09 – Ghostline Transmission  \\n15:34 – Twilight Frequencies  \\n21:23 – Zero Core Pulse  \\n25:58 – Vortex Memory  \\n29:35 – Mindshift Protocol  \\n33:36 – Astral Discharge  \\n37:31 – Psynaptic Current  \\n41:56 – Xeno Signal Flow  \\n45:08 – Dreamcode Injection  \\n50:26 – Dark Matter Helix  \\n57:39 – Symmetry Collapse  \\n01:01:28 – Cosmic Shard  \\n01:07:25 – Phase Reptile  \\n01:13:43 – Plasma Bloom  \\n01:18:28 – Silent Loop Error  \\n01:22:18 – Crystalline Lockdown  \\n01:26:43 – Chrono Reactor  \\n01:29:26 – Binary Jungle  \\n01:34:36 – Magnetic Dusk  \\n01:38:25 – Alien Glyph Sequence  \\n01:45:22 – Dustform Echoes  \\n01:50:58 – InfraCore Drift  \\n01:55:02 – Transvoid Shift  \\n02:00:28 – Lucid Fragmentation  \\n\\n#psytrance #goatrance #cosmictrance #mystictrance #trancemix #hypnoticbeats #acidtrance #psydeep #darktrance #trancestate #spiritualbass\",\n                \"download_path\": \"downloads\",\n                \"duration\": null,\n                \"duration_formatted\": \"Não disponível\",\n                \"file_size\": null,\n                \"id\": 198,\n                \"like_count\": 903,\n                \"resolution\": \"best\",\n                \"status\": \"queued\",\n                \"subtitle_embedded\": null,\n                \"subtitle_lang\": null,\n                \"thumbnail_url\": \"https://i.ytimg.com/vi/HO8gBglZMLg/maxresdefault.jpg\",\n                \"timestamp\": \"2025-09-02 16:51:52\",\n                \"title\": \"Cosmic Pressure | Goa Trance, Psytrance, Psygressive, Acid Psy, Cosmic Trance, Deep Psy\",\n                \"title_short\": \"Cosmic Pressure | Goa Trance, Psytrance, Psygressi...\",\n                \"uploader\": \"Euphoric Dimensions\",\n                \"url\": \"https://youtu.be/HO8gBglZMLg?si=4VHRItSR-OUNR8TG\",\n                \"view_count\": 74361,\n                \"view_count_formatted\": \"74,361\"\n            },\n            {\n                \"date_formatted\": \"02/09/2025 16:32\",\n                \"description\": \"Confira a Nuuvem, parceira do canal com os melhores preços de games: https://baix.in/BRKsNuuvem\\nBilômetro, meu comparador de preços GRÁTIS: https://bilometro.brksedu.com.br/\\n\\nVídeo de série de gameplay do jogo Donkey Kong Bananza, game exclusivo de Nintendo Switch 2.\\n\\nMeu podcast: https://www.youtube.com/@DeBytePodcast\\n\\nContato comercial: brksedu@vandep.ag\\n\\nEdição por: BRKsEDU\\n\\n#BRKsEDU\",\n                \"download_path\": \"downloads\",\n                \"duration\": null,\n                \"duration_formatted\": \"Não disponível\",\n                \"file_size\": null,\n                \"id\": 197,\n                \"like_count\": 549,\n                \"resolution\": \"best\",\n                \"status\": \"queued\",\n                \"subtitle_embedded\": null,\n                \"subtitle_lang\": null,\n                \"thumbnail_url\": \"https://i.ytimg.com/vi/gLyfNkk5fcs/maxresdefault.jpg\",\n                \"timestamp\": \"2025-09-02 16:32:06\",\n                \"title\": \"DONKEY KONG BANANZA #22 - Problemas Oleosos!!! | Gameplay em Português PT-BR\",\n                \"title_short\": \"DONKEY KONG BANANZA #22 - Problemas Oleosos!!! | G...\",\n                \"uploader\": \"BRKsEDU\",\n                \"url\": \"https://youtu.be/gLyfNkk5fcs\",\n                \"view_count\": 1861,\n                \"view_count_formatted\": \"1,861\"\n            },\n            {\n                \"date_formatted\": \"02/09/2025 15:38\",\n                \"description\": \"E ai gente, como vocês estão?\\nfiz compras na Temu e decidi abrir tudo com vocês no vídeo de hoje! Espero que gostem :)\\n\\nlink para baixar app temu: https://temu.to/m/uanphkzq20p\\ncupom para usar no app da temu: acp710165\\n\\n Instagram: @lauandarioss \\nTwitter: Lauandarioss\\nSpotify: Lauandarioss\\nTikTok: Lauandariosss\\n\\n♡CONTATO PROFISSIONAL\\nEmail: contatolauandarios@gmail.com\",\n                \"download_path\": \"downloads\",\n                \"duration\": null,\n                \"duration_formatted\": \"Não disponível\",\n                \"file_size\": null,\n                \"id\": 196,\n                \"like_count\": 3973,\n                \"resolution\": \"best\",\n                \"status\": \"queued\",\n                \"subtitle_embedded\": null,\n                \"subtitle_lang\": null,\n                \"thumbnail_url\": \"https://i.ytimg.com/vi_webp/M-1CbXKFM-I/maxresdefault.webp\",\n                \"timestamp\": \"2025-09-02 15:38:16\",\n                \"title\": \"abrindo coisas que comprei na Temu  *não patrocinado*\",\n                \"title_short\": \"abrindo coisas que comprei na Temu  *não patrocina...\",\n                \"uploader\": \"Lauanda Rios\",\n                \"url\": \"https://youtu.be/M-1CbXKFM-I?si=4T2hCyM2d9u7LD8B\",\n                \"view_count\": 55033,\n                \"view_count_formatted\": \"55,033\"\n            },\n            {\n                \"date_formatted\": \"02/09/2025 14:53\",\n                \"description\": \"The official video for “Never Gonna Give You Up” by Rick Astley. \\n\\nNever: The Autobiography 📚 OUT NOW! \\nFollow this link to get your copy and listen to Rick’s ‘Never’ playlist ❤️ #RickAstleyNever\\nhttps://linktr.ee/rickastleynever\\n\\n“Never Gonna Give You Up” was a global smash on its release in July 1987, topping the charts in 25 countries including Rick’s native UK and the US Billboard Hot 100.  It also won the Brit Award for Best single in 1988. Stock Aitken and Waterman wrote and produced the track which was the lead-off single and lead track from Rick’s debut LP “Whenever You Need Somebody”.  The album was itself a UK number one and would go on to sell over 15 million copies worldwide.\\n\\nThe legendary video was directed by Simon West – who later went on to make Hollywood blockbusters such as Con Air, Lara Croft – Tomb Raider and The Expendables 2.  The video passed the 1bn YouTube views milestone on 28 July 2021.\\n\\nSubscribe to the official Rick Astley YouTube channel: https://RickAstley.lnk.to/YTSubID\\n\\nFollow Rick Astley:\\nFacebook: https://RickAstley.lnk.to/FBFollowID \\nTwitter: https://RickAstley.lnk.to/TwitterID \\nInstagram: https://RickAstley.lnk.to/InstagramID \\nWebsite: https://RickAstley.lnk.to/storeID \\nTikTok: https://RickAstley.lnk.to/TikTokID\\n\\nListen to Rick Astley:\\nSpotify: https://RickAstley.lnk.to/SpotifyID \\nApple Music: https://RickAstley.lnk.to/AppleMusicID \\nAmazon Music: https://RickAstley.lnk.to/AmazonMusicID \\nDeezer: https://RickAstley.lnk.to/DeezerID \\n\\nLyrics:\\nWe’re no strangers to love\\nYou know the rules and so do I\\nA full commitment’s what I’m thinking of\\nYou wouldn’t get this from any other guy\\n\\nI just wanna tell you how I’m feeling\\nGotta make you understand\\n\\nNever gonna give you up\\nNever gonna let you down\\nNever gonna run around and desert you\\nNever gonna make you cry\\nNever gonna say goodbye\\nNever gonna tell a lie and hurt you\\n\\nWe’ve known each other for so long\\nYour heart’s been aching but you’re too shy to say it\\nInside we both know what’s been going on\\nWe know the game and we’re gonna play it\\n\\nAnd if you ask me how I’m feeling\\nDon’t tell me you’re too blind to see\\n\\nNever gonna give you up\\nNever gonna let you down\\nNever gonna run around and desert you\\nNever gonna make you cry\\nNever gonna say goodbye\\nNever gonna tell a lie and hurt you\\n\\n#RickAstley #NeverGonnaGiveYouUp #WheneverYouNeedSomebody #OfficialMusicVideo\",\n                \"download_path\": \"downloads\",\n                \"duration\": null,\n                \"duration_formatted\": \"Não disponível\",\n                \"file_size\": null,\n                \"id\": 195,\n                \"like_count\": 18531165,\n                \"resolution\": \"audio-best\",\n                \"status\": \"queued\",\n                \"subtitle_embedded\": null,\n                \"subtitle_lang\": null,\n                \"thumbnail_url\": \"https://i.ytimg.com/vi_webp/dQw4w9WgXcQ/maxresdefault.webp\",\n                \"timestamp\": \"2025-09-02 14:53:14\",\n                \"title\": \"Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)\",\n                \"title_short\": \"Rick Astley - Never Gonna Give You Up (Official Vi...\",\n                \"uploader\": \"Rick Astley\",\n                \"url\": \"https://www.youtube.com/watch?v=dQw4w9WgXcQ\",\n                \"view_count\": 1690218111,\n                \"view_count_formatted\": \"1,690,218,111\"\n            },\n            {\n                \"date_formatted\": \"02/09/2025 14:31\",\n                \"description\": \"⭐️  𝗘𝗫𝗖𝗟𝗨𝗦𝗜𝗩𝗘 𝗠𝗜𝗫  ⭐️\\n\\nS P E E D S O U N D  ★  R E C O R D S  (👽★⚡)\\n\\n★ Follow the Label ★ \\n\\n+ YOUTUBE +\\nhttps://www.youtube.com/user/speedsoundtv\\n+ SPOTIFY +\\nhttps://open.spotify.com/playlist/4ttrpqZDbl8pwsxIe8vpuZ?si=9263d77ab93d468f\\n+ SAMPLE PACKS / DAW TEMPLATES +\\nhttps://www.producerloops.com/Speedsound\\n+ BANDCAMP +\\nhttps://drop7.bandcamp.com/\\n+ FAN PAGE +\\nhttps://www.facebook.com/speedsoundmusic\\n+ INSTAGRAM +\\nhttps://instagram.com/speedsound.rec\\n+ BEATPORT +\\nhttps://www.beatport.com/label/speedsound-rec/49066\\n+ TELEGRAM +\\nhttps://t.me/+Wpd05JRp654yMGQx\\n+ PSYLOOPS +\\nhttps://www.facebook.com/profile.php?id=61565536810694\\n+ SOUNDCLOUD +\\nhttps://soundcloud.com/speedsound\\n+ TWITTER +\\nhttps://twitter.com/speedsoundmusic\\n+ TIKTOK +\\nhttps://www.tiktok.com/@speedsound.rec\\n\\n\\n𝗦𝗲𝗻𝗱 𝘆𝗼𝘂𝗿 𝗗𝗲𝗺𝗼𝘀 / 𝗬𝗼𝘂𝗧𝘂𝗯𝗲 𝗽𝗿𝗼𝗺𝗼𝘁𝗶𝗼𝗻 / 𝗣𝗮𝗿𝘁𝗻𝗲𝗿𝘀𝗵𝗶𝗽𝘀\\n📧 Mail: xvibe.com@gmail.com\\n\\n\\n𝗩𝗶𝗱𝗲𝗼 𝗰𝗿𝗲𝗱𝗶𝘁𝘀: Jason\\nYouTube:\\nhttps://www.youtube.com/@Jason-mj9pq\\n\\n\\n𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲 𝗣𝘀𝘆𝗰𝗵𝗲𝗱𝗲𝗹𝗶𝗰 𝗩𝗼𝗰𝗮𝗹𝘀 𝗣𝗮𝗰𝗸\\nhttps://www.producerloops.com/Download-Speedsound-Psytrance-Psychedelic-Vocals-Pack.html\\n\\n𝗔𝗯𝗹𝗲𝘁𝗼𝗻 𝗟𝗶𝘃𝗲 𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲 𝗧𝗲𝗺𝗽𝗹𝗮𝘁𝗲: 𝗔𝘀𝘁𝗿𝗮𝗹 𝗧𝗿𝗶𝗽\\nhttps://www.producerloops.com/Download-Speedsound-Ableton-Live-Psytrance-Template-Astral-Trip.html\\n\\n𝗧𝗵𝗲 𝗟𝗮𝘀𝘁 𝗗𝗲𝗰𝗮𝗱𝗲 𝗼𝗳 𝗣𝘀𝘆𝘁𝗿𝗮𝗻𝗰𝗲: 𝗣𝘀𝘆𝗰𝗵𝗲𝗱𝗲𝗹𝗶𝗰 𝗧𝗿𝗮𝗻𝗰𝗲\\nhttps://www.producerloops.com/Download-Speedsound-The-Last-Decade-of-Psytrance-Psychedelic-Trance.html\\n\\n\\nTurn on the 🔔 to get notifications for new uploads!\\n\\n\\n📋 Tags:\\n#psytrance #psychedelic #trance #trancefamily #psy #psychedelictrance #visual #trippy #raves #speedsound #abstract #trippyvideos #aiart #TrippyVibes #PsychedelicJourney #Mushrooms #TranceMusic #PsychedelicExperience #MindExpansion #MusicAndNature #PsychedelicVisuals #SonicJourney #MushroomVibes #PsychedelicArt #TranceVibes #aiartwork #aivisualization \\n\\n🙏🏻🎯 THANKS FOR WATCHING!\\n\\n© Speedsound Records - 2025\",\n                \"download_path\": null,\n                \"duration\": null,\n                \"duration_formatted\": \"Não disponível\",\n                \"file_size\": \"877476520\",\n                \"id\": 194,\n                \"like_count\": 0,\n                \"resolution\": \"1200x720\",\n                \"status\": \"completed\",\n                \"subtitle_embedded\": null,\n                \"subtitle_lang\": null,\n                \"thumbnail_url\": \"\",\n                \"timestamp\": \"2025-09-02 14:31:01\",\n                \"title\": \"Psychedelic Trance - Sci-Fi Trippy / Hallucinations mix 2025 (AI Graphic Visuals)\",\n                \"title_short\": \"Psychedelic Trance - Sci-Fi Trippy / Hallucination...\",\n                \"uploader\": \"Speedsound\",\n                \"url\": \"https://youtu.be/NHYaA2jBcNw?si=Fm94SPJ87Kk6X-5S\",\n                \"view_count\": \"23,349\",\n                \"view_count_formatted\": \"23,349\"\n            }\n        ],\n        \"page\": 1,\n        \"pages\": 1,\n        \"per_page\": 10,\n        \"total\": 10\n    },\n    \"message\": \"Histórico obtido com sucesso\",\n    \"status\": \"success\",\n    \"timestamp\": \"2025-09-02T21:41:38.882051Z\"\n}"
+				}
+			]
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Script executado antes de cada requisição",
+					"console.log('Executando requisição para:', pm.request.url.toString());",
+					"",
+					"// Verificar se as variáveis de ambiente estão configuradas",
+					"if (!pm.environment.get('base_url')) {",
+					"    console.warn('Variável base_url não configurada. Usando padrão: http://localhost:5000');",
+					"    pm.environment.set('base_url', 'http://localhost:5000');",
+					"}",
+					"",
+					"if (!pm.environment.get('api_prefix')) {",
+					"    pm.environment.set('api_prefix', '/api/v1');",
+					"}"
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					"// Script executado após cada requisição",
+					"console.log('Resposta recebida com status:', pm.response.code);",
+					"",
+					"// Teste global: verificar se a resposta é JSON válido",
+					"pm.test('Response is valid JSON', function () {",
+					"    pm.response.to.be.json;",
+					"});",
+					"",
+					"// Teste global: verificar se há timestamp na resposta",
+					"pm.test('Response has timestamp', function () {",
+					"    const jsonData = pm.response.json();",
+					"    pm.expect(jsonData).to.have.property('timestamp');",
+					"});",
+					"",
+					"// Teste global: verificar estrutura básica da resposta",
+					"pm.test('Response has required structure', function () {",
+					"    const jsonData = pm.response.json();",
+					"    pm.expect(jsonData).to.have.property('status');",
+					"    pm.expect(['success', 'error']).to.include(jsonData.status);",
+					"});"
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "base_url",
+			"value": "http://localhost:5000",
+			"description": "URL base da API YouTube Downloader"
+		},
+		{
+			"key": "api_prefix",
+			"value": "/api/v1",
+			"description": "Prefixo da versão da API"
+		},
+		{
+			"key": "download_id",
+			"value": "",
+			"description": "ID do download (preenchido automaticamente após iniciar um download)"
+		}
+	]
+}
