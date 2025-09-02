@@ -6,7 +6,7 @@ from utils import AppUtils, AppConstants
 class DownloadManager:
     """Gerenciador de downloads de vídeos do YouTube"""
     
-    def __init__(self, log_manager, progress_callback=None, postprocessor_callback=None):
+    def __init__(self, log_manager, progress_callback=None, postprocessor_callback=None, config_manager=None):
         """
         Inicializa o gerenciador de downloads
         
@@ -18,6 +18,7 @@ class DownloadManager:
         self.log_manager = log_manager
         self.progress_callback = progress_callback
         self.postprocessor_callback = postprocessor_callback
+        self.config_manager = config_manager
         
         # Estado do download
         self.is_downloading = False
@@ -66,6 +67,9 @@ class DownloadManager:
                 'extractflat': False
             }
             
+            if self.config_manager and self.config_manager.get_cookies_file_path():
+                ydl_opts['cookiefile'] = self.config_manager.get_cookies_file_path()
+
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
                 info = ydl.extract_info(url, download=False)
             
@@ -123,6 +127,53 @@ class DownloadManager:
         self.log_manager.log_info(f"Total de formatos válidos: {len(valid_formats)}")
         return resolutions_list
     
+    def get_available_subtitles(self, url):
+        """
+        Lista as legendas disponíveis para um vídeo.
+
+        Args:
+            url (str): URL do vídeo.
+
+        Returns:
+            tuple: (sucesso, dicionario_de_legendas_ou_erro)
+        """
+        self.log_manager.log_info(f"Buscando legendas para: {url}")
+        try:
+            ydl_opts = {
+                'listsubtitles': True,
+                'quiet': True,
+                'no_warnings': True,
+            }
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=False)
+
+            subtitles = {}
+            # Legendas manuais (geralmente de melhor qualidade)
+            if 'subtitles' in info and info['subtitles']:
+                for lang_code, subs in info['subtitles'].items():
+                    if subs:
+                        sub_info = subs[-1]
+                        subtitles[lang_code] = sub_info.get('name', lang_code)
+
+            # Legendas automáticas
+            if 'automatic_captions' in info and info['automatic_captions']:
+                for lang_code, subs in info['automatic_captions'].items():
+                    if lang_code not in subtitles and subs:  # Não sobrescrever legendas manuais
+                        sub_info = subs[-1]
+                        sub_name = sub_info.get('name', lang_code) + " (Automática)"
+                        subtitles[lang_code] = sub_name
+            
+            if subtitles:
+                self.log_manager.log_info(f"Legendas encontradas: {list(subtitles.keys())}")
+                return True, subtitles
+            else:
+                self.log_manager.log_warning(f"Nenhuma legenda encontrada para: {url}")
+                return True, {}  # Sucesso, mas sem legendas
+
+        except Exception as e:
+            error_msg = self.log_manager.log_error(e, "Erro ao buscar legendas")
+            return False, error_msg
+    
     def find_format_id(self, selected_resolution):
         """
         Encontra o format_id adequado para a resolução selecionada
@@ -161,7 +212,7 @@ class DownloadManager:
         
         return None
     
-    def start_download(self, url, selected_resolution, success_callback=None, error_callback=None, audio_only=False, audio_quality='best'):
+    def start_download(self, url, selected_resolution, success_callback=None, error_callback=None, audio_only=False, audio_quality='best', subtitle_lang=None, embed_subtitle=False):
         """
         Inicia o download do vídeo ou áudio em thread separada
         
@@ -190,26 +241,63 @@ class DownloadManager:
             format_id = 'bestaudio'
             download_type = f"áudio ({audio_quality})"
         else:
-            # Encontrar format_id para vídeo
-            video_format_id = self.find_format_id(selected_resolution)
-            if not video_format_id:
-                return False, f"Não foi possível encontrar formato adequado para {selected_resolution}"
-            format_id = video_format_id
-            download_type = f"vídeo ({selected_resolution})"
+            # Normalizar resolução solicitada
+            sr = (selected_resolution or '').strip().lower()
+            # Estratégias:
+            # - 'best' ou equivalente: usar seletor genérico do yt-dlp (bestvideo*+bestaudio/best)
+            # - padrão numérico '###p': usar filtro por altura (bestvideo[height<=H]+bestaudio/best)
+            # - caso contrário: tentar localizar format_id exato baseado nos formatos extraídos
+            if sr in ('best', 'melhor qualidade disponível'):
+                format_id = None  # será tratado na construção do seletor
+                download_type = "vídeo (best)"
+            elif sr.endswith('p') and sr[:-1].isdigit():
+                format_id = None  # será tratado na construção do seletor por altura
+                download_type = f"vídeo ({selected_resolution})"
+            else:
+                # Encontrar format_id para vídeo com base na resolução textual
+                video_format_id = self.find_format_id(selected_resolution)
+                if not video_format_id:
+                    return False, f"Não foi possível encontrar formato adequado para {selected_resolution}"
+                format_id = video_format_id
+                download_type = f"vídeo ({selected_resolution})"
         
         # Iniciar download em thread separada
         self.is_downloading = True
         self.download_thread = threading.Thread(
             target=self._download_worker,
-            args=(url, format_id, download_type, success_callback, error_callback, audio_only, audio_quality),
+            args=(
+                url,
+                format_id,
+                download_type,
+                success_callback,
+                error_callback,
+                audio_only,
+                audio_quality,
+                subtitle_lang,
+                embed_subtitle,
+                selected_resolution,
+            ),
             daemon=True
         )
         self.download_thread.start()
         
         return True, f"Download de {download_type} iniciado"
     
-    def _download_worker(self, url, format_id, download_type, success_callback, error_callback, audio_only=False, audio_quality='best'):
-        """Worker thread para executar o download de vídeo ou áudio"""
+    def _download_worker(self, url, format_id, download_type, success_callback, error_callback, audio_only=False, audio_quality='best', subtitle_lang=None, embed_subtitle=False, selected_resolution=None):
+        """Worker thread para executar o download de vídeo ou áudio
+        
+        Args:
+            url (str): URL do conteúdo
+            format_id (str|None): Identificador de formato específico quando aplicável
+            download_type (str): Texto para logging do tipo de download
+            success_callback (callable|None): Callback de sucesso
+            error_callback (callable|None): Callback de erro
+            audio_only (bool): Se True, baixa somente áudio
+            audio_quality (str): Qualidade do áudio quando audio_only=True
+            subtitle_lang (str|None): Código da legenda a baixar/incorporar
+            embed_subtitle (bool): Se deve embutir legenda em vídeo
+            selected_resolution (str|None): Resolução solicitada (ex.: 'best', '720p', '1280x720')
+        """
         try:
             self.log_manager.log_info(
                 f"Iniciando download: {self.current_info.get('title', 'video')} - {download_type}"
@@ -220,7 +308,15 @@ class DownloadManager:
             self.log_manager.log_info(f"Usando ffmpeg em: {ffmpeg_path}")
             
             # Configurar opções do yt-dlp
-            ydl_opts = self._get_download_options(format_id, ffmpeg_path, audio_only, audio_quality)
+            ydl_opts = self._get_download_options(
+                format_id,
+                ffmpeg_path,
+                audio_only,
+                audio_quality,
+                subtitle_lang,
+                embed_subtitle,
+                selected_resolution,
+            )
             
             # Executar download
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -238,8 +334,21 @@ class DownloadManager:
         finally:
             self.is_downloading = False
     
-    def _get_download_options(self, format_id, ffmpeg_path, audio_only=False, audio_quality='best'):
-        """Configura opções do yt-dlp para download de vídeo ou áudio"""
+    def _get_download_options(self, format_id, ffmpeg_path, audio_only=False, audio_quality='best', subtitle_lang=None, embed_subtitle=False, selected_resolution=None):
+        """Configura opções do yt-dlp para download de vídeo ou áudio
+        
+        Args:
+            format_id (str|None): Identificador de formato de vídeo quando resoluções específicas foram mapeadas
+            ffmpeg_path (str): Caminho do executável do ffmpeg
+            audio_only (bool): Se True, baixa somente o áudio
+            audio_quality (str): Qualidade do áudio quando audio_only=True
+            subtitle_lang (str|None): Código de idioma da legenda a baixar
+            embed_subtitle (bool): Define se a legenda deve ser embutida (apenas vídeo)
+            selected_resolution (str|None): Resolução textual solicitada (ex.: 'best', '720p', '1280x720')
+        
+        Returns:
+            dict: Dicionário de opções para yt-dlp
+        """
         if audio_only:
             # Configurações para download apenas de áudio
             options = {
@@ -260,8 +369,10 @@ class DownloadManager:
                 'abort_on_unavailable_fragment': False,
                 'socket_timeout': AppConstants.SOCKET_TIMEOUT,
                 'http_chunk_size': AppConstants.HTTP_CHUNK_SIZE,
-                'writesubtitles': False,
-                'writeautomaticsub': False,
+                'writesubtitles': bool(subtitle_lang),
+                'writeautomaticsub': bool(subtitle_lang),
+                'subtitleslangs': [subtitle_lang] if subtitle_lang else [],
+                'embedsubtitles': embed_subtitle if not audio_only else False, # Não embutir em áudio
                 'postprocessors': [{
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': AppConstants.SUPPORTED_AUDIO_FORMAT,
@@ -270,8 +381,24 @@ class DownloadManager:
             }
         else:
             # Configurações para download de vídeo com fallback robusto
-            # Usar estratégia de fallback para evitar erros de formato
-            format_selector = f"{format_id}+bestaudio/best[height<={self._extract_height_from_resolution(format_id)}]/best"
+            # Selecionar formato conforme resolução solicitada
+            format_selector = None
+            if selected_resolution:
+                sr = selected_resolution.strip().lower()
+                if sr in ('best', 'melhor qualidade disponível'):
+                    # Melhor estratégia combinada: melhor vídeo (qualquer contêiner) + melhor áudio, com fallback para "best"
+                    format_selector = 'bestvideo*+bestaudio/best'
+                elif sr.endswith('p') and sr[:-1].isdigit():
+                    # Seleção por altura numérica (e.g., 720p)
+                    height = int(sr[:-1])
+                    # Tenta melhor vídeo até o limite + melhor áudio; fallback para melhor até o limite; por fim, "best"
+                    format_selector = f'bestvideo[height<={height}]+bestaudio/best/best[height<={height}]/best'
+            
+            if not format_selector:
+                # Comportamento antigo baseado em format_id específico
+                height_limit = self._extract_height_from_resolution(format_id) if format_id else 1080
+                format_selector = f"{format_id}+bestaudio/best[height<={height_limit}]/best" if format_id else f"bestvideo[height<={height_limit}]+bestaudio/best/best"
+            
             options = {
                 'format': format_selector,
                 'outtmpl': f"{self.download_directory}/%(title).200s.%(ext)s",
@@ -291,8 +418,10 @@ class DownloadManager:
                 'abort_on_unavailable_fragment': False,
                 'socket_timeout': AppConstants.SOCKET_TIMEOUT,
                 'http_chunk_size': AppConstants.HTTP_CHUNK_SIZE,
-                'writesubtitles': False,
-                'writeautomaticsub': False,
+                'writesubtitles': bool(subtitle_lang),
+                'writeautomaticsub': bool(subtitle_lang),
+                'subtitleslangs': [subtitle_lang] if subtitle_lang else [],
+                'embedsubtitles': embed_subtitle,
             }
         
         return options

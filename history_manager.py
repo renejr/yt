@@ -62,41 +62,81 @@ class HistoryManager:
         except Exception as e:
             return None, f"Erro ao buscar download: {str(e)}"
         
-    def add_download_to_history(self, download_data):
+    def add_download_to_history(self, **download_data):
         """
-        Adiciona um download ao histórico
-        
+        Adiciona um registro de download ao histórico, incluindo informações de legenda.
+
         Args:
-            download_data (dict): Dados do download
-            
-        Returns:
-            tuple: (sucesso, id_do_download_ou_erro)
+            **download_data: Dicionário contendo os dados do download.
+                             Pode incluir 'title', 'url', 'resolution', 'status',
+                             'file_path', 'file_size', 'subtitle_lang', 'subtitle_path',
+                             'is_embedded'.
         """
+        self.log_manager.log_info(f"Adicionando ao histórico: {download_data.get('title')}")
         try:
-            # Validar dados obrigatórios
-            if not download_data.get('url'):
-                return False, "URL é obrigatória"
-            
-            # Preparar dados com valores padrão
-            prepared_data = self._prepare_download_data(download_data)
-            
-            # Adicionar ao banco
-            download_id = self.db_manager.add_download(prepared_data)
-            
-            # Armazenar o último ID para referência
-            self._last_download_id = download_id
-            
-            if self.log_manager:
-                self.log_manager.log_info(
-                    f"Download adicionado ao histórico: {prepared_data.get('title', 'N/A')} (ID: {download_id})"
+            # Dados para a tabela 'downloads' (incluindo suporte a playlists)
+            download_info = {
+                'title': download_data.get('title'),
+                'url': download_data.get('url'),
+                'resolution': download_data.get('resolution'),
+                'status': download_data.get('status', 'completed'),
+                'download_path': download_data.get('download_path'),
+                'file_size': download_data.get('file_size'),
+                'thumbnail_url': download_data.get('thumbnail_url', ''),
+                'uploader': download_data.get('uploader', ''),
+                'view_count': download_data.get('view_count', 0),
+                'like_count': download_data.get('like_count', 0),
+                'description': download_data.get('description', ''),
+                'is_playlist': 1 if download_data.get('is_playlist', False) else 0,
+                'playlist_title': download_data.get('playlist_title'),
+                'playlist_index': download_data.get('playlist_index'),
+                'playlist_total': download_data.get('playlist_total')
+            }
+
+            # Query para inserir na tabela 'downloads' (incluindo colunas de playlist)
+            download_sql = """
+                INSERT INTO downloads (
+                    title, url, resolution, status, download_path, file_size, 
+                    thumbnail_url, uploader, view_count, like_count, description,
+                    is_playlist, playlist_title, playlist_index, playlist_total
+                ) VALUES (
+                    :title, :url, :resolution, :status, :download_path, :file_size, 
+                    :thumbnail_url, :uploader, :view_count, :like_count, :description,
+                    :is_playlist, :playlist_title, :playlist_index, :playlist_total
                 )
+            """
             
+            # Adicionar a query de download à lista de transações
+            queries = [(download_sql, download_info)]
+            
+            # Inserir na tabela 'downloads' e obter o ID
+            download_id = self.db_manager.execute_transaction(queries)
+            self.log_manager.log_info(f"Registro de download inserido com ID: {download_id}")
+
+            # Dados para a tabela 'subtitles'
+            subtitle_lang = download_data.get('subtitle_lang')
+            subtitle_path = download_data.get('subtitle_path')
+            is_embedded = download_data.get('is_embedded', False)
+
+            if subtitle_lang and subtitle_path:
+                subtitle_info = {
+                    'download_id': download_id,
+                    'lang_code': subtitle_lang,
+                    'file_path': subtitle_path,
+                    'is_embedded': is_embedded
+                }
+                subtitle_sql = """
+                    INSERT INTO subtitles (download_id, lang_code, file_path, is_embedded)
+                    VALUES (:download_id, :lang_code, :file_path, :is_embedded)
+                """
+                # Executar a inserção da legenda como uma nova transação (ou adicionar à anterior se o método suportar)
+                self.db_manager.execute_transaction([(subtitle_sql, subtitle_info)])
+                self.log_manager.log_info(f"Registro de legenda inserido para download ID: {download_id}")
+
             return True, download_id
-            
+
         except Exception as e:
-            error_msg = f"Erro ao adicionar download ao histórico: {str(e)}"
-            if self.log_manager:
-                self.log_manager.log_error(e, "Histórico")
+            error_msg = self.log_manager.log_error(e, "Erro ao adicionar ao histórico")
             return False, error_msg
     
     def get_last_download_id(self):

@@ -125,19 +125,21 @@ class HistoryTab:
         # Treeview para histórico
         self.tree_frame = tk.Frame(self.frame)
         
-        columns = ('ID', 'Título', 'Resolução', 'Data', 'Status')
+        columns = ('ID', 'Título', 'Resolução', 'Legenda', 'Data', 'Status')
         self.history_tree = ttk.Treeview(self.tree_frame, columns=columns, show='headings', height=15)
         
         # Configurar colunas
         self.history_tree.heading('ID', text='ID')
         self.history_tree.heading('Título', text='Título')
         self.history_tree.heading('Resolução', text='Resolução')
+        self.history_tree.heading('Legenda', text='Legenda')
         self.history_tree.heading('Data', text='Data')
         self.history_tree.heading('Status', text='Status')
         
         self.history_tree.column('ID', width=50)
         self.history_tree.column('Título', width=300)
         self.history_tree.column('Resolução', width=100)
+        self.history_tree.column('Legenda', width=120)
         self.history_tree.column('Data', width=150)
         self.history_tree.column('Status', width=100)
         
@@ -286,10 +288,23 @@ class HistoryTab:
         
         # Adicionar ao treeview
         for download in downloads:
+            # Formatar informação da legenda
+            subtitle_lang = download.get('subtitle_lang')
+            subtitle_embedded = download.get('subtitle_embedded')
+            
+            subtitle_info = "N/A"
+            if subtitle_lang:
+                subtitle_info = subtitle_lang.upper()
+                if subtitle_embedded:
+                    subtitle_info += " (Embutida)"
+                else:
+                    subtitle_info += " (Arquivo)"
+
             self.history_tree.insert('', 'end', values=(
                 download.get('id', ''),
                 download.get('title_short', download.get('title', 'N/A')),
                 download.get('resolution', 'N/A'),
+                subtitle_info,
                 download.get('date_formatted', 'N/A'),
                 download.get('status', 'N/A')
             ))
@@ -504,7 +519,7 @@ class HistoryTab:
                         download['resolution'],
                         download['timestamp'],
                         download['status'],
-                        download.get('file_path', '')
+                        download.get('download_path', '')
                     ])
             
             AppUtils.show_info_message("Exportação", f"Dados exportados com sucesso para:\n{filename}")

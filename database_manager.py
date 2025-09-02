@@ -11,6 +11,33 @@ class DatabaseManager:
     def initialize(self):
         """Inicializa o banco de dados com schema atualizado"""
         self.schema.initialize_database()
+
+    def execute_transaction(self, queries_with_params):
+        """
+        Executa uma lista de queries como uma única transação.
+
+        Args:
+            queries_with_params (list): Uma lista de tuplas, onde cada tupla contém (sql_query, params_dict).
+
+        Returns:
+            int: O ID da última linha inserida na transação.
+        """
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        last_row_id = None
+        try:
+            for query, params in queries_with_params:
+                cursor.execute(query, params)
+                if cursor.lastrowid:
+                    last_row_id = cursor.lastrowid
+            conn.commit()
+            return last_row_id
+        except Exception as e:
+            conn.rollback()
+            logging.error(f"Erro na transação: {e}")
+            raise
+        finally:
+            conn.close()
     
     def add_download(self, download_data):
         """Adiciona um download ao histórico"""
@@ -56,17 +83,21 @@ class DatabaseManager:
         return self.get_downloads_paginated(page=1, per_page=limit)['downloads']
     
     def get_downloads_paginated(self, page=1, per_page=50, filters=None):
-        """Obtém downloads com paginação e filtros opcionais"""
+        """Obtém downloads com paginação, filtros e dados de legenda."""
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
         
         try:
-            # Construir query base
+            # Construir query base com LEFT JOIN para incluir dados de legenda
             base_query = """
-                SELECT id, url, title, duration, resolution, file_size, 
-                       download_path, status, thumbnail_url, uploader, 
-                       view_count, like_count, description, download_date as timestamp
-                FROM downloads
+                SELECT 
+                    d.id, d.url, d.title, d.duration, d.resolution, d.file_size, 
+                    d.download_path, d.status, d.thumbnail_url, d.uploader, 
+                    d.view_count, d.like_count, d.description, d.download_date as timestamp,
+                    s.lang_code as subtitle_lang,
+                    s.is_embedded as subtitle_embedded
+                FROM downloads d
+                LEFT JOIN subtitles s ON d.id = s.download_id
             """
             
             # Construir condições WHERE se houver filtros
@@ -75,23 +106,23 @@ class DatabaseManager:
             
             if filters:
                 if filters.get('search_query'):
-                    where_conditions.append("title LIKE ?")
+                    where_conditions.append("d.title LIKE ?")
                     params.append(f"%{filters['search_query']}%")
                 
                 if filters.get('resolution'):
-                    where_conditions.append("resolution = ?")
+                    where_conditions.append("d.resolution = ?")
                     params.append(filters['resolution'])
                 
                 if filters.get('status'):
-                    where_conditions.append("status = ?")
+                    where_conditions.append("d.status = ?")
                     params.append(filters['status'])
                 
                 if filters.get('date_from'):
-                    where_conditions.append("download_date >= ?")
+                    where_conditions.append("d.download_date >= ?")
                     params.append(filters['date_from'])
                 
                 if filters.get('date_to'):
-                    where_conditions.append("download_date <= ?")
+                    where_conditions.append("d.download_date <= ?")
                     params.append(filters['date_to'])
             
             # Montar query completa
@@ -100,7 +131,7 @@ class DatabaseManager:
             
             # Adicionar ordenação e paginação
             offset = (page - 1) * per_page
-            query = base_query + " ORDER BY download_date DESC LIMIT ? OFFSET ?"
+            query = base_query + " ORDER BY d.download_date DESC LIMIT ? OFFSET ?"
             params.extend([per_page, offset])
             
             # Executar query principal
@@ -108,16 +139,18 @@ class DatabaseManager:
             columns = [description[0] for description in cursor.description]
             downloads = [dict(zip(columns, row)) for row in cursor.fetchall()]
             
-            # Obter contagem total
-            count_query = "SELECT COUNT(*) FROM downloads"
+            # Obter contagem total (sem o JOIN para performance)
+            count_query = "SELECT COUNT(*) FROM downloads d"
             if where_conditions:
                 count_query += " WHERE " + " AND ".join(where_conditions)
             
-            cursor.execute(count_query, params[:-2])  # Remover LIMIT e OFFSET dos parâmetros
+            # Na contagem, os parâmetros são os mesmos, exceto LIMIT e OFFSET
+            count_params = [p for p in params if p not in (per_page, offset)]
+            cursor.execute(count_query, count_params)
             total_count = cursor.fetchone()[0]
             
             # Calcular informações de paginação
-            total_pages = (total_count + per_page - 1) // per_page  # Ceiling division
+            total_pages = (total_count + per_page - 1) // per_page if per_page > 0 else 0
             
             return {
                 'downloads': downloads,

@@ -23,6 +23,8 @@ from history_manager import HistoryManager
 from ui_components import MainApplication
 from database_manager import DatabaseManager
 from utils import AppConstants
+# from api_server import APIManager
+from api_server import APIServer
 
 def initialize_database():
     """
@@ -47,7 +49,7 @@ def create_managers(db_manager):
         db_manager: Instância do DatabaseManager
         
     Returns:
-        tuple: (log_manager, download_manager, config_manager, history_manager)
+        tuple: (log_manager, download_manager, config_manager, history_manager, api_manager)
     """
     # Criar gerenciador de logs
     log_manager = LogManager()
@@ -65,7 +67,16 @@ def create_managers(db_manager):
     download_manager = DownloadManager(log_manager)
     log_manager.log_info("Gerenciador de downloads inicializado")
     
-    return log_manager, download_manager, config_manager, history_manager
+    # Criar gerenciador da API
+    api_manager = APIServer(
+        config_manager=config_manager,
+        download_manager=download_manager,
+        history_manager=history_manager,
+        log_manager=log_manager
+    )
+    log_manager.log_info("Gerenciador da API inicializado")
+    
+    return log_manager, download_manager, config_manager, history_manager, api_manager
 
 def setup_error_handling(log_manager):
     """
@@ -121,13 +132,25 @@ def main():
             return 1
         
         # Criar gerenciadores
-        log_manager, download_manager, config_manager, history_manager = create_managers(db_manager)
+        log_manager, download_manager, config_manager, history_manager, api_manager = create_managers(db_manager)
         
         # Configurar tratamento de erros
         setup_error_handling(log_manager)
         
         # Executar tarefas de inicialização
         perform_startup_tasks(log_manager)
+        
+        # Inicializar API se habilitada
+        if config_manager.get_api_enabled():
+            try:
+                api_manager.start()
+                log_manager.log_info("API REST iniciada com sucesso")
+                print(f"API REST disponível em: http://{config_manager.get_api_host()}:{config_manager.get_api_port()}")
+            except Exception as e:
+                log_manager.log_error(f"Erro ao iniciar API REST: {e}", "API")
+                print(f"Aviso: Não foi possível iniciar a API REST: {e}")
+        else:
+            log_manager.log_info("API REST desabilitada nas configurações")
         
         # Criar e executar aplicação principal
         log_manager.log_info("Criando interface gráfica")
@@ -143,6 +166,14 @@ def main():
         
         # Iniciar loop principal
         app.run()
+        
+        # Parar API se estava rodando
+        if config_manager.get_api_enabled() and api_manager.is_running:
+            try:
+                api_manager.stop()
+                log_manager.log_info("API REST parada com sucesso")
+            except Exception as e:
+                log_manager.log_error(f"Erro ao parar API REST: {e}", "API")
         
         # Cleanup ao sair
         log_manager.log_info("Aplicação encerrada normalmente")

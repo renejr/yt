@@ -1,0 +1,424 @@
+{
+	"id": "be5be5dc-066a-4c06-9adf-c13a09cf63b9",
+	"name": "YouTube Downloader API",
+	"timestamp": "2025-09-02T16:52:59.771Z",
+	"collection_id": "7726022-4c202601-4b8b-43e3-a015-b5e8af837a3f",
+	"folder_id": 0,
+	"environment_id": "0",
+	"totalPass": 32,
+	"delay": 0,
+	"persist": true,
+	"status": "finished",
+	"startedAt": "2025-09-02T16:52:47.840Z",
+	"totalFail": 10,
+	"results": [
+		{
+			"id": "9518b8f5-1094-4dbf-8ba4-f95ea9e61b65",
+			"name": "Health Check",
+			"url": "http://localhost:5000//api/v1/health",
+			"time": 18,
+			"responseCode": {
+				"code": 200,
+				"name": "OK"
+			},
+			"tests": {
+				"Response is valid JSON": true,
+				"Response has timestamp": true,
+				"Response has required structure": true,
+				"Status code is 200": true,
+				"Response has success status": true,
+				"API version is present": false,
+				"Components status check": false
+			},
+			"testPassFailCounts": {
+				"Response is valid JSON": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has timestamp": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has required structure": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Status code is 200": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has success status": {
+					"pass": 1,
+					"fail": 0
+				},
+				"API version is present": {
+					"pass": 0,
+					"fail": 1
+				},
+				"Components status check": {
+					"pass": 0,
+					"fail": 1
+				}
+			},
+			"times": [
+				18
+			],
+			"allTests": [
+				{
+					"Response is valid JSON": true,
+					"Response has timestamp": true,
+					"Response has required structure": true,
+					"Status code is 200": true,
+					"Response has success status": true,
+					"API version is present": false,
+					"Components status check": false
+				}
+			]
+		},
+		{
+			"id": "49c38c7e-f4c8-4337-b65a-1ba3d1cacf16",
+			"name": "Get Video Info",
+			"url": "http://localhost:5000//api/v1/video/info",
+			"time": 4904,
+			"responseCode": {
+				"code": 200,
+				"name": "OK"
+			},
+			"tests": {
+				"Response is valid JSON": true,
+				"Response has timestamp": true,
+				"Response has required structure": true,
+				"Status code is 200": true,
+				"Response has success status": true,
+				"Video info contains required fields": false
+			},
+			"testPassFailCounts": {
+				"Response is valid JSON": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has timestamp": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has required structure": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Status code is 200": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has success status": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Video info contains required fields": {
+					"pass": 0,
+					"fail": 1
+				}
+			},
+			"times": [
+				4904
+			],
+			"allTests": [
+				{
+					"Response is valid JSON": true,
+					"Response has timestamp": true,
+					"Response has required structure": true,
+					"Status code is 200": true,
+					"Response has success status": true,
+					"Video info contains required fields": false
+				}
+			]
+		},
+		{
+			"id": "679d7e44-3135-4179-aaf6-3ce76a65be77",
+			"name": "Start Download",
+			"url": "http://localhost:5000//api/v1/download",
+			"time": 4061,
+			"responseCode": {
+				"code": 400,
+				"name": "BAD REQUEST"
+			},
+			"tests": {
+				"Response is valid JSON": true,
+				"Response has timestamp": true,
+				"Response has required structure": true,
+				"Status code is 201": false,
+				"Response has success status": false,
+				"Download ID is present": false,
+				"Download status is queued": false
+			},
+			"testPassFailCounts": {
+				"Response is valid JSON": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has timestamp": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has required structure": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Status code is 201": {
+					"pass": 0,
+					"fail": 1
+				},
+				"Response has success status": {
+					"pass": 0,
+					"fail": 1
+				},
+				"Download ID is present": {
+					"pass": 0,
+					"fail": 1
+				},
+				"Download status is queued": {
+					"pass": 0,
+					"fail": 1
+				}
+			},
+			"times": [
+				4061
+			],
+			"allTests": [
+				{
+					"Response is valid JSON": true,
+					"Response has timestamp": true,
+					"Response has required structure": true,
+					"Status code is 201": false,
+					"Response has success status": false,
+					"Download ID is present": false,
+					"Download status is queued": false
+				}
+			]
+		},
+		{
+			"id": "9300f249-3410-4cbb-a7fe-04d698d75419",
+			"name": "Get Download Status",
+			"url": "http://localhost:5000//api/v1/download/dl_ea77265f503b/status",
+			"time": 103,
+			"responseCode": {
+				"code": 200,
+				"name": "OK"
+			},
+			"tests": {
+				"Response is valid JSON": true,
+				"Response has timestamp": true,
+				"Response has required structure": true,
+				"Status code is 200": true,
+				"Response has success status": true,
+				"Download status is valid": true,
+				"Progress is a number": true
+			},
+			"testPassFailCounts": {
+				"Response is valid JSON": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has timestamp": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has required structure": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Status code is 200": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has success status": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Download status is valid": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Progress is a number": {
+					"pass": 1,
+					"fail": 0
+				}
+			},
+			"times": [
+				103
+			],
+			"allTests": [
+				{
+					"Response is valid JSON": true,
+					"Response has timestamp": true,
+					"Response has required structure": true,
+					"Status code is 200": true,
+					"Response has success status": true,
+					"Download status is valid": true,
+					"Progress is a number": true
+				}
+			]
+		},
+		{
+			"id": "23f4d42f-4026-462c-8806-03801fb2f767",
+			"name": "Get Download Progress",
+			"url": "http://localhost:5000//api/v1/download/dl_ea77265f503b/progress",
+			"time": 7,
+			"responseCode": {
+				"code": 200,
+				"name": "OK"
+			},
+			"tests": {
+				"Response is valid JSON": true,
+				"Response has timestamp": true,
+				"Response has required structure": true,
+				"Status code is 200": true,
+				"Response has success status": true,
+				"Progress data structure is correct": false,
+				"Progress percentage is valid": true
+			},
+			"testPassFailCounts": {
+				"Response is valid JSON": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has timestamp": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has required structure": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Status code is 200": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has success status": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Progress data structure is correct": {
+					"pass": 0,
+					"fail": 1
+				},
+				"Progress percentage is valid": {
+					"pass": 1,
+					"fail": 0
+				}
+			},
+			"times": [
+				7
+			],
+			"allTests": [
+				{
+					"Response is valid JSON": true,
+					"Response has timestamp": true,
+					"Response has required structure": true,
+					"Status code is 200": true,
+					"Response has success status": true,
+					"Progress data structure is correct": false,
+					"Progress percentage is valid": true
+				}
+			]
+		},
+		{
+			"id": "90c3a4af-b184-46d6-a441-3a68e85435c3",
+			"name": "Get Download History",
+			"url": "http://localhost:5000//api/v1/downloads?page=1&per_page=10&status=completed",
+			"time": 280,
+			"responseCode": {
+				"code": 200,
+				"name": "OK"
+			},
+			"tests": {
+				"Response is valid JSON": true,
+				"Response has timestamp": true,
+				"Response has required structure": true,
+				"Status code is 200": true,
+				"Response has success status": true,
+				"Downloads array is present": true,
+				"Pagination info is present": false,
+				"Pagination values are valid": false
+			},
+			"testPassFailCounts": {
+				"Response is valid JSON": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has timestamp": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has required structure": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Status code is 200": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Response has success status": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Downloads array is present": {
+					"pass": 1,
+					"fail": 0
+				},
+				"Pagination info is present": {
+					"pass": 0,
+					"fail": 1
+				},
+				"Pagination values are valid": {
+					"pass": 0,
+					"fail": 1
+				}
+			},
+			"times": [
+				280
+			],
+			"allTests": [
+				{
+					"Response is valid JSON": true,
+					"Response has timestamp": true,
+					"Response has required structure": true,
+					"Status code is 200": true,
+					"Response has success status": true,
+					"Downloads array is present": true,
+					"Pagination info is present": false,
+					"Pagination values are valid": false
+				}
+			]
+		}
+	],
+	"count": 1,
+	"totalTime": 9373,
+	"collection": {
+		"requests": [
+			{
+				"id": "9518b8f5-1094-4dbf-8ba4-f95ea9e61b65",
+				"method": "GET"
+			},
+			{
+				"id": "49c38c7e-f4c8-4337-b65a-1ba3d1cacf16",
+				"method": "POST"
+			},
+			{
+				"id": "679d7e44-3135-4179-aaf6-3ce76a65be77",
+				"method": "POST"
+			},
+			{
+				"id": "9300f249-3410-4cbb-a7fe-04d698d75419",
+				"method": "GET"
+			},
+			{
+				"id": "23f4d42f-4026-462c-8806-03801fb2f767",
+				"method": "GET"
+			},
+			{
+				"id": "90c3a4af-b184-46d6-a441-3a68e85435c3",
+				"method": "GET"
+			}
+		]
+	}
+}
