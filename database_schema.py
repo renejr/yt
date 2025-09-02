@@ -6,7 +6,7 @@ from datetime import datetime
 class DatabaseSchema:
     def __init__(self, db_path="youtube_downloader.db"):
         self.db_path = db_path
-        self.current_version = 4  # Versão atual do schema
+        self.current_version = 6  # Versão atual do schema
         
     def get_db_version(self):
         """Obtém a versão atual do banco de dados"""
@@ -153,6 +153,45 @@ class DatabaseSchema:
         ]
         self.apply_migration(4, "Adição de campos para análise de velocidade", commands)
     
+    def migrate_to_version_5(self):
+        """Migração v5: Tabela para legendas"""
+        commands = [
+            """
+            CREATE TABLE IF NOT EXISTS subtitles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                download_id INTEGER NOT NULL,
+                lang_code TEXT NOT NULL,
+                file_path TEXT,
+                is_embedded INTEGER DEFAULT 0,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (download_id) REFERENCES downloads (id) ON DELETE CASCADE
+            )
+            """,
+            "CREATE INDEX IF NOT EXISTS idx_subtitles_download_id ON subtitles(download_id)"
+        ]
+        self.apply_migration(5, "Criação da tabela de legendas", commands)
+        
+    def migrate_to_version_6(self):
+        """Migração v6: Suporte a playlists"""
+        commands = [
+            """
+            ALTER TABLE downloads ADD COLUMN is_playlist INTEGER DEFAULT 0
+            """,
+            """
+            ALTER TABLE downloads ADD COLUMN playlist_title TEXT DEFAULT NULL
+            """,
+            """
+            ALTER TABLE downloads ADD COLUMN playlist_index INTEGER DEFAULT NULL
+            """,
+            """
+            ALTER TABLE downloads ADD COLUMN playlist_total INTEGER DEFAULT NULL
+            """,
+            """
+            CREATE INDEX IF NOT EXISTS idx_downloads_playlist ON downloads(is_playlist, playlist_title)
+            """
+        ]
+        self.apply_migration(6, "Adição de suporte a playlists", commands)
+    
     def initialize_database(self):
         """Inicializa e atualiza o banco de dados automaticamente"""
         logging.info("Iniciando verificação do schema do banco de dados...")
@@ -177,6 +216,9 @@ class DatabaseSchema:
         
         if current_db_version < 4:
             self.migrate_to_version_4()
+            
+        if current_db_version < 5:
+            self.migrate_to_version_5()
         
         if current_db_version < self.current_version:
             logging.info(f"Banco de dados atualizado para v{self.current_version}")
